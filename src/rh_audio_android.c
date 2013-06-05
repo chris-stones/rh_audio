@@ -261,15 +261,15 @@ int rh_audiosample_close(rh_audiosample_handle h) {
 
 		if (pthread_mutex_lock(&h->monitor) == 0) {
 
-			//TODO: cleanup resources
+			//TODO: cleanup resources - what resources?
+		  
+			if((h->flags & RH_AUDIOSAMPLE_DONTCOPYSRC)==0)
+			  free(h->src);
 
 			pthread_mutex_unlock(&h->monitor);
 		}
 
 		pthread_mutex_destroy(&h->monitor);
-
-		if ((h->flags & RH_AUDIOSAMPLE_DONTCOPYSRC) == 0)
-			free((void*) (h->src));
 
 		free(h);
 	}
@@ -437,7 +437,7 @@ int rh_audiosample_wait(rh_audiosample_handle h) {
 	if (pthread_mutex_lock(&h->monitor) == 0) {
 
 		while (h->priv_flags & (PRIV_FLAG_LOOPING | PRIV_FLAG_PLAYING))
-			pthread_cond_wait(&h->cond, &h->monitor); // TODO: handle cancellation point
+			cond_wait_and_unlock_if_cancelled(&h->cond, &h->monitor);
 
 		err = 0;
 

@@ -239,7 +239,7 @@ int rh_audiosample_wait( rh_audiosample_handle h ) {
   if( pthread_mutex_lock(&h->monitor) == 0 ) {
     
     while( h->priv_flags & ( PRIV_FLAG_LOOPING | PRIV_FLAG_PLAYING ) )
-      pthread_cond_wait( &h->cond, &h->monitor );
+      cond_wait_and_unlock_if_cancelled( &h->cond, &h->monitor );
     
     err = 0;
     
