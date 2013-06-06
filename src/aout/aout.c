@@ -218,11 +218,6 @@ int aout_open(aout_handle * h, unsigned int chanels, unsigned int rate) {
   return _aout_open(h,chanels,rate, 1);
 }
 
-//int aout_open_r(aout_handle * h, unsigned int chanels, unsigned int rate) {
-//  
-//  return _aout_open(h,chanels,rate, 1);
-//}
-
 aout_handle aout_addref(aout_handle p) {
   
   if( pthread_mutex_lock( &p->monitor ) == 0)  {

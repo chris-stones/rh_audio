@@ -25,14 +25,7 @@ typedef enum {
 
 typedef int (*rh_audiosample_cb_type)(rh_audiosample_handle h, void * cb_data, rh_audioevent_cb_event_enum_t ev);
 
-
-#ifdef RH_TARGET_ANDROID
-// TODO: use raw resources, and remove the need for asset manager?
-int rh_audiosample_setup(AAssetManager *asset_manager);
-#else
 int rh_audiosample_setup();
-#endif
-
 int rh_audiosample_shutdown();
 
 int rh_audiosample_open		( rh_audiosample_handle * h, const char * source, int flags );

@@ -4,14 +4,13 @@
 #include<pthread.h>
 #include<unistd.h>
 
-#include<lib/util/bucket/bucket.h>
+#include "bucket.h"
 
 #include <SLES/OpenSLES.h>
 #include <SLES/OpenSLES_Android.h>
-
 #include <android/native_activity.h>
-
 #include <android/log.h>
+
 #define LOGI(...) __android_log_print(ANDROID_LOG_WARN, "native-activity", __VA_ARGS__)
 #define LOGW(...) __android_log_print(ANDROID_LOG_WARN, "native-activity", __VA_ARGS__)
 
@@ -20,8 +19,6 @@
 #endif /* RH_TARGET_ANDROID */
 #define RH_TARGET_ANDROID 1
 #include "rh_audio_internal.h"
-
-//TODO: make sure it is impossible to leak callbacks, or call the same callback multiple times ( natural end happending at same time as stop() call )
 
 // ANDROID NDK BUG WORKAROUND ?
 #ifdef __cplusplus
@@ -88,6 +85,8 @@ static void _cb(SLPlayItf caller, void * cb_data, SLuint32 event) {
 	if( pthread_mutex_lock(&h->monitor) == 0) {
 
 		int e = -1;
+		
+		int old_priv_flags = h->priv_flags;
 
 		if (event & SL_PLAYEVENT_HEADATEND ) {
 
@@ -98,7 +97,7 @@ static void _cb(SLPlayItf caller, void * cb_data, SLuint32 event) {
 			h->priv_flags = 0;
 			pthread_cond_broadcast(&h->cond);
 
-			if(h->cb)
+			if(h->cb && ((old_priv_flags & PRIV_FLAG_PLAYING) == PRIV_FLAG_PLAYING))
 				(*(h->cb))(h, h->cb_data, RH_AUDIOSAMPLE_STOPPED);
 		}
 
@@ -106,8 +105,12 @@ static void _cb(SLPlayItf caller, void * cb_data, SLuint32 event) {
 	}
 }
 
-static int _rh_audiosample_setup(AAssetManager *asset_manager) {
-
+static int _rh_audiosample_setup() {
+  
+	extern AAssetManager * __rh_hack_get_android_asset_manager();
+	  
+	AAssetManager *asset_manager = __rh_hack_get_android_asset_manager();
+ 
 	static const SLEngineOption options[] = { { SL_ENGINEOPTION_THREADSAFE,
 			SL_BOOLEAN_TRUE },
 			{ SL_ENGINEOPTION_LOSSOFCONTROL, SL_BOOLEAN_FALSE }, };
@@ -148,22 +151,34 @@ static int _rh_audiosample_setup(AAssetManager *asset_manager) {
 	err5: err4: err3: err2: err1: err0: return -1;
 }
 
+static int _rh_audiosample_shutdown() {
+  
+   if(openSLES.outputMix)
+     (*openSLES.outputMix)->Destroy(openSLES.outputMix);
+   
+   if(openSLES.engineObject)
+     (*openSLES.engineObject)->Destroy(openSLES.engineObject);
+   
+   openSLES.engineItf = NULL;
+   openSLES.engineObject = NULL;
+   openSLES.outputMix = NULL;
+   
+   return 0;
+}
+
 static pthread_mutex_t init_mutex = PTHREAD_MUTEX_INITIALIZER;
 static int isInitialised = 0;
 
-int rh_audiosample_setup(AAssetManager *asset_manager) {
+int rh_audiosample_setup() {
 
 	int err = -1;
-
-	if (isInitialised)
-		return 0;
 
 	if (pthread_mutex_lock(&init_mutex) == 0) {
 
 		if (isInitialised)
 			err = 0;
 		else {
-			err = _rh_audiosample_setup(asset_manager);
+			err = _rh_audiosample_setup();
 			if (!err)
 				isInitialised = 1;
 		}
@@ -176,8 +191,23 @@ int rh_audiosample_setup(AAssetManager *asset_manager) {
 
 int rh_audiosample_shutdown() {
 
-	// TODO: one time shutdown
-	return -1;
+  
+  int err = -1;
+
+	if (pthread_mutex_lock(&init_mutex) == 0) {
+
+		if (!isInitialised)
+			err = 0;
+		else {
+			err = _rh_audiosample_shutdown();
+			if (!err)
+				isInitialised = 0;
+		}
+
+		pthread_mutex_unlock(&init_mutex);
+	}
+
+	return err;
 }
 
 static int init_recursive_pthread_mutex(pthread_mutex_t * mutex) {
@@ -378,10 +408,8 @@ static int _rh_audiosample_play(rh_audiosample_handle h, int loop) {
 
 		h->priv_flags = 0;
 
-		if (h->channel == NULL) {
-
+		if (h->channel == NULL) 
 			h->channel = create_channel(openSLES.asset_manager, h);
-		}
 
 		if (h->channel) {
 
@@ -452,6 +480,8 @@ int rh_audiosample_stop(rh_audiosample_handle h) {
 	SLresult err = SL_RESULT_UNKNOWN_ERROR;
 
 	if (h && pthread_mutex_lock(&h->monitor) == 0) {
+	  
+		int old_priv_flags = h->priv_flags;
 
 		if (h && h->channel && h->channel->playItf)
 			err = (*h->channel->playItf)->SetPlayState(h->channel->playItf,
@@ -468,7 +498,7 @@ int rh_audiosample_stop(rh_audiosample_handle h) {
 		pthread_cond_broadcast(&h->cond);
 		pthread_mutex_unlock(&h->monitor);
 
-		if (h->cb) {
+		if (h->cb && ((old_priv_flags & PRIV_FLAG_PLAYING)==PRIV_FLAG_PLAYING)) {
 
 			if (err == SL_RESULT_SUCCESS )
 				(*(h->cb))(h, h->cb_data, RH_AUDIOSAMPLE_STOPPED);

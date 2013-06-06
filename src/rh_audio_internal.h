@@ -8,7 +8,7 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-
+  
 static inline int cond_wait_and_unlock_if_cancelled(pthread_cond_t * cond, pthread_mutex_t * mutex) {
  
   int err;
