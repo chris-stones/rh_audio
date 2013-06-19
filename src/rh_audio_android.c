@@ -1,3 +1,8 @@
+
+#ifdef __cplusplus
+#undef __cplusplus
+#endif
+
 #include<string.h>
 #include<stdio.h>
 #include<stdlib.h>
@@ -8,16 +13,13 @@
 
 #include <SLES/OpenSLES.h>
 #include <SLES/OpenSLES_Android.h>
+#include <android/asset_manager.h>
 #include <android/native_activity.h>
 #include <android/log.h>
 
 #define LOGI(...) __android_log_print(ANDROID_LOG_WARN, "native-activity", __VA_ARGS__)
 #define LOGW(...) __android_log_print(ANDROID_LOG_WARN, "native-activity", __VA_ARGS__)
 
-#ifdef RH_TARGET_ANDROID
-#undef RH_TARGET_ANDROID
-#endif /* RH_TARGET_ANDROID */
-#define RH_TARGET_ANDROID 1
 #include "rh_audio_internal.h"
 
 // ANDROID NDK BUG WORKAROUND ?
@@ -48,7 +50,7 @@ struct rh_audiosample_type {
 	pthread_cond_t cond;
 	rh_audiosample_cb_type cb;
 	void* cb_data;
-	const char* src;
+	char* src;
 	int flags;
 	int priv_flags;
 	channel_ptr channel;
@@ -267,7 +269,7 @@ int rh_audiosample_open(rh_audiosample_handle * out, const char * source, int fl
 			return 0;
 		}
 	} else {
-		h->src = source;
+		h->src = (char*)source;
 		*out = h;
 
 		rh_audiosample_add_to_internal_bucket( h );
@@ -290,8 +292,6 @@ int rh_audiosample_close(rh_audiosample_handle h) {
 		rh_audiosample_remove_from_internal_bucket( h );
 
 		if (pthread_mutex_lock(&h->monitor) == 0) {
-
-			//TODO: cleanup resources - what resources?
 		  
 			if((h->flags & RH_AUDIOSAMPLE_DONTCOPYSRC)==0)
 			  free(h->src);

@@ -1,7 +1,7 @@
 
 #include <alloca.h>
 
-#include <lib/util/bucket/bucket.h>
+#include "bucket.h"
 
 #include "rh_audio_internal.h"
 
