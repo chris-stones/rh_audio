@@ -1,7 +1,6 @@
 
 #include "alsa.h"
 
-#include<lib/util/bucket/bucket.h>
 #include<alloca.h>
 #include<pthread.h>
 #include<signal.h>
@@ -10,6 +9,9 @@
 #include<unistd.h>
 #include<fcntl.h>
 #include<stdio.h>
+
+#include<bucket.h>
+
 
 struct io_command_struct {
   

@@ -1,9 +1,9 @@
 
 #include "rh_audio_internal.h"
 
-#include<lib/audio/aout/aout.h>
-#include<lib/audio/asmp/asmp.h>
-#include<lib/util/bucket/bucket.h>
+#include "aout/aout.h"
+#include "asmp/asmp.h"
+#include "bucket.h"
 
 #include<string.h>
 #include<stdio.h>

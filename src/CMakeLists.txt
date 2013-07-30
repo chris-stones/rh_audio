@@ -1,16 +1,17 @@
 
+cmake_minimum_required(VERSION 2.8)
 
 add_subdirectory(aout)
 add_subdirectory(asmp)
 
-FILE(GLOB c_source_files *linux.c)
+FILE(GLOB linux_c_source_files *linux.c)
 
-add_library(my_rh_audio STATIC ${c_source_files} )
+add_library(rh_audio SHARED ${linux_c_source_files} rh_audio_common.c bucket.c)
 #add_library(rh_audio SHARED ${c_source_files} )
 #add_library(rh_audio SHARED "rh_audio_linux.c" )
 
-install (TARGETS my_rh_audio DESTINATION lib/rockhopper)
-#install (FILES ${asmp_cxx_header_files} asmp.h DESTINATION include/rockhopper)
+install (TARGETS rh_audio DESTINATION lib/)
+install (FILES rh_audio.h DESTINATION include/)
 
-target_link_libraries (my_rh_audio asmp aout bucket pthread rt)
+target_link_libraries (rh_audio asmp pthread rt -Wl,--start-group aout aout_alsa -Wl,--end-group)
 

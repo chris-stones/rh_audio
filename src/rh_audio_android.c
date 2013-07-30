@@ -109,11 +109,13 @@ static int _rh_audiosample_setup() {
   
 	extern AAssetManager * __rh_hack_get_android_asset_manager();
 	  
-	AAssetManager *asset_manager = __rh_hack_get_android_asset_manager();
+	AAssetManager *asset_manager;
  
 	static const SLEngineOption options[] = { { SL_ENGINEOPTION_THREADSAFE,
 			SL_BOOLEAN_TRUE },
 			{ SL_ENGINEOPTION_LOSSOFCONTROL, SL_BOOLEAN_FALSE }, };
+			
+	asset_manager = __rh_hack_get_android_asset_manager();
 
 	openSLES.asset_manager = asset_manager;
 
