@@ -4,6 +4,7 @@
 #include<stdlib.h>
 #include<pthread.h>
 
+
 int asmp_open(aud_sample_handle * h, const char * const fn) {
 
   aud_sample_handle p = calloc(1, sizeof( struct aud_sample_type ) );
@@ -11,11 +12,11 @@ int asmp_open(aud_sample_handle * h, const char * const fn) {
   if(!p)
    goto err0;
 
-  if( aud_init_interface_libsndfile( p ) != 0 )
-     goto err1;
-
-//  if( aud_init_interface_ffmpeg( p ) != 0 )
+//  if( aud_init_interface_libsndfile( p ) != 0 )
 //     goto err1;
+
+  if( aud_init_interface_ffmpeg( p ) != 0 )
+     goto err1;
 
   if( pthread_mutex_init( &p->monitor, NULL ) != 0)
     goto err1;

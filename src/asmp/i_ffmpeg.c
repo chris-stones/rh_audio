@@ -31,7 +31,7 @@ struct priv_internal {
 	AVCodecContext  *	pCodecCtx;
 	AVCodec			*	pCodec;
 	AVFrame			*	pFrame;
-
+	int                 processedSamples;
 	int firstAudioStream;
 
 	int stat;
@@ -121,7 +121,7 @@ static int _aud_sample_opener(aud_sample_handle p, const char * const fn) {
     p->samplerate 	= priv->pCodecCtx->sample_rate;
 
 	if( priv->pCodecCtx->sample_fmt != AV_SAMPLE_FMT_S16 )
-		printf("WARNING: audio native format is not S16, we will have to re-sample\n");
+		printf("ERROR: audio native format is not S16, we will have to re-sample (TODO)\n");
 
     return 0;
   }
@@ -137,8 +137,6 @@ static int _ff_read_packet(struct priv_internal * priv) {
 	int frameFinished = 0;
 
 	while(av_read_frame(priv->pFormatCtx, &packet) >= 0) {
-
-//		frameFinished = 0;
 
 		if(packet.stream_index == priv->firstAudioStream) {
 
@@ -162,15 +160,26 @@ static int _aud_sample_reader(aud_sample_handle p, int samples, void * dst, size
 	int ret = 0;
 	struct priv_internal * priv = get_priv(p);
 
-//	while(samples>0) {
-//
-//		if( _ff_read_packet(priv) == 0 ) {
-//
-//
-//		}
-//	}
+	if(priv->processedSamples >= priv->pFrame->nb_samples) {
 
-    return 0;
+		priv->processedSamples = 0;
+		_ff_read_packet(priv);
+	}
+
+	{
+		int samplesRemainingInFrame = priv->pFrame->nb_samples - priv->processedSamples;
+		if(samples > samplesRemainingInFrame)
+			samples = samplesRemainingInFrame;
+	}
+
+	// FIXME - ASSUMING S16
+	memcpy( dst,
+			((char *)priv->pFrame->data[0]) + (priv->pFrame->channels * 2 * priv->processedSamples),
+			samples * priv->pFrame->channels * 2);
+
+	priv->processedSamples += samples;
+
+    return samples;
 }
 
 static int _aud_sample_stater(aud_sample_handle p) {
