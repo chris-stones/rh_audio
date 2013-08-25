@@ -7,7 +7,8 @@
 #include <string.h>
 #include <stdlib.h>
 
-int aout_init_interface_alsa(aout_handle p);
+int aout_init_interface_ALSA(aout_handle p);
+int aout_init_interface_OpenSLES(aout_handle p);
 
 typedef int(*aout_channel_open)(aout_handle p, unsigned int channels, unsigned int rate);
 typedef int(*aout_channel_close)(aout_handle p);
@@ -43,7 +44,7 @@ struct aout_type {
 
   aout_channel_start channel_start;
   aout_channel_stop channel_stop;
-  aout_channel_update channel_update;
+//  aout_channel_update channel_update;
   aout_channel_open channel_open;
   aout_channel_close channel_close;
 

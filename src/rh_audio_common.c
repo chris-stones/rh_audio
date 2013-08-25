@@ -1,6 +1,8 @@
 
 #include <alloca.h>
 #include <string.h>
+#include <stdlib.h>
+#include <stdio.h>
 
 #include "bucket.h"
 
@@ -85,6 +87,13 @@ int rh_audiosample_closeall() {
 int rh_audiosample_stopall() {
 
 	return _rh_audiosample_do_all( DOALL_ACTION_STOP );
+}
+
+int rh_audiosample_open_rawpak( rh_audiosample_handle * h, void * ctx, int flags) {
+
+	char * resname = (char*)alloca(64);
+	sprintf(resname,"rh_rawpak_ctx://%p", ctx);
+	return rh_audiosample_open(h, resname, flags & ~RH_AUDIOSAMPLE_DONTCOPYSRC);
 }
 
 #ifdef __cplusplus

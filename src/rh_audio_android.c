@@ -87,7 +87,7 @@ static void _cb(SLPlayItf caller, void * cb_data, SLuint32 event) {
 	if( pthread_mutex_lock(&h->monitor) == 0) {
 
 		int e = -1;
-		
+
 		int old_priv_flags = h->priv_flags;
 
 		if (event & SL_PLAYEVENT_HEADATEND ) {
@@ -108,15 +108,15 @@ static void _cb(SLPlayItf caller, void * cb_data, SLuint32 event) {
 }
 
 static int _rh_audiosample_setup() {
-  
+
 	extern AAssetManager * __rh_hack_get_android_asset_manager();
-	  
+
 	AAssetManager *asset_manager;
- 
+
 	static const SLEngineOption options[] = { { SL_ENGINEOPTION_THREADSAFE,
 			SL_BOOLEAN_TRUE },
 			{ SL_ENGINEOPTION_LOSSOFCONTROL, SL_BOOLEAN_FALSE }, };
-			
+
 	asset_manager = __rh_hack_get_android_asset_manager();
 
 	openSLES.asset_manager = asset_manager;
@@ -156,17 +156,17 @@ static int _rh_audiosample_setup() {
 }
 
 static int _rh_audiosample_shutdown() {
-  
+
    if(openSLES.outputMix)
      (*openSLES.outputMix)->Destroy(openSLES.outputMix);
-   
+
    if(openSLES.engineObject)
      (*openSLES.engineObject)->Destroy(openSLES.engineObject);
-   
+
    openSLES.engineItf = NULL;
    openSLES.engineObject = NULL;
    openSLES.outputMix = NULL;
-   
+
    return 0;
 }
 
@@ -195,7 +195,7 @@ int rh_audiosample_setup() {
 
 int rh_audiosample_shutdown() {
 
-  
+
   int err = -1;
 
 	if (pthread_mutex_lock(&init_mutex) == 0) {
@@ -294,7 +294,7 @@ int rh_audiosample_close(rh_audiosample_handle h) {
 		rh_audiosample_remove_from_internal_bucket( h );
 
 		if (pthread_mutex_lock(&h->monitor) == 0) {
-		  
+
 			if((h->flags & RH_AUDIOSAMPLE_DONTCOPYSRC)==0)
 			  free(h->src);
 
@@ -354,7 +354,6 @@ static channel_ptr create_channel(AAssetManager* assetManager,
 		const SLboolean req[] = { SL_BOOLEAN_TRUE };
 
 		p->fd = fd;
-
 		// configure audio source
 		SLDataLocator_AndroidFD loc_fd = { SL_DATALOCATOR_ANDROIDFD, fd, start,
 				length };
@@ -410,7 +409,7 @@ static int _rh_audiosample_play(rh_audiosample_handle h, int loop) {
 
 		h->priv_flags = 0;
 
-		if (h->channel == NULL) 
+		if (h->channel == NULL)
 			h->channel = create_channel(openSLES.asset_manager, h);
 
 		if (h->channel) {
@@ -482,7 +481,7 @@ int rh_audiosample_stop(rh_audiosample_handle h) {
 	SLresult err = SL_RESULT_UNKNOWN_ERROR;
 
 	if (h && pthread_mutex_lock(&h->monitor) == 0) {
-	  
+
 		int old_priv_flags = h->priv_flags;
 
 		if (h && h->channel && h->channel->playItf)

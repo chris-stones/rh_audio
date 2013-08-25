@@ -53,15 +53,15 @@ int rh_audiosample_setup() {
       err = 0;
 
     } else {
+
       aout_register_default_sample_readfunc( (aout_sample_reader)&asmp_read );
       aout_register_default_sample_resetfunc( (aout_sample_resetter)&asmp_reset );
       aout_register_default_sample_statfunc( (aout_sample_stater)&asmp_stat );
-//    aout_register_default_sample_sizefunc( (aout_sample_sizer) &asmp_size );
 
       err = bucket_create( &channel_bucket );
 
       if(!err)
-	isInitialised = 1;
+		isInitialised = 1;
     }
 
     pthread_mutex_unlock( &init_mutex );

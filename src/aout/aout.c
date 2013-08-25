@@ -164,8 +164,14 @@ static int _aout_open(aout_handle * h, unsigned int chanels, unsigned int rate, 
   if(!p)
    goto err0;
 
-  aout_init_interface_alsa(p);
+  // Configure audio output backend.
+#ifdef __ANDROID__
+  aout_init_interface_OpenSLES(p);
+#else
+  aout_init_interface_ALSA(p);
+#endif
 
+  // Set default audio input backend.
   p->samp_reader = _default_sample_reader;
   p->samp_resetter = _default_sample_resetter;
   p->samp_stater = _default_sample_stater;

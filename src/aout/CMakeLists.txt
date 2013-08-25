@@ -2,6 +2,7 @@
 add_definitions(-fPIC)
 
 add_subdirectory(alsa)
+add_subdirectory(OpenSLES)
 
 FILE(GLOB c_source_files *.c)
 

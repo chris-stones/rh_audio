@@ -7,6 +7,7 @@
 
 #include "asmp_internal.h"
 
+#include<rh_raw_loader.h>
 
 /*** INCLUDE FFMPEG ***************/
 #ifndef UINT64_C
@@ -65,10 +66,35 @@ static int _aud_sample_opener(aud_sample_handle p, const char * const fn) {
 		return -1;
 	}
 
-	if(avformat_open_input(&priv->pFormatCtx, fn, NULL, NULL)!=0) {
-	  avcodec_free_frame(&priv->pFrame);
-      free(priv);
-	  return -1;
+	{
+		if(strncmp("rh_rawpak_ctx://",fn,16)==0) {
+
+			void * p = NULL;
+
+			printf("its a rh_rawpak_ctx://\n");
+
+			if(sscanf(fn+16,"%p",&p) != 1) {
+				avcodec_free_frame(&priv->pFrame);
+				free(priv);
+				return -1;
+			}
+
+			printf("loading context %p\n", p);
+
+			if(rh_rawpak_open_avformatctx( (rh_rawpak_ctx)p, 0, (void**)&priv->pFormatCtx )!=0) {
+				avcodec_free_frame(&priv->pFrame);
+				free(priv);
+				return -1;
+			}
+		}
+		else {
+
+			if(avformat_open_input(&priv->pFormatCtx, fn, NULL, NULL)!=0) {
+				avcodec_free_frame(&priv->pFrame);
+				free(priv);
+				return -1;
+			}
+		}
 	}
 
     if(avformat_find_stream_info(priv->pFormatCtx, NULL)<0) {
@@ -77,7 +103,6 @@ static int _aud_sample_opener(aud_sample_handle p, const char * const fn) {
 		free(priv);
 		return -1;
     }
-
 
 	{
 	int i;
