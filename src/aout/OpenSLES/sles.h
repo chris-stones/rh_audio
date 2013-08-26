@@ -50,6 +50,5 @@ int aout_OpenSLES_io_setup();
 int aout_OpenSLES_io_add(aout_handle h);
 int aout_OpenSLES_io_rem(aout_handle h);
 int aout_OpenSLES_io_teardown();
-
-
+int aout_OpenSLES_io_return_buffer(aout_handle h);
 

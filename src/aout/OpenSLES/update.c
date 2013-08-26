@@ -2,7 +2,22 @@
 #include "sles.h"
 #include <stdio.h>
 
-static int _OpenSLES_transfer(aout_handle h) {
+
+static int enqueue(aout_handle h) {
+
+	struct priv_internal * p = get_priv(h);
+	buffer_queue_t * bq = &p->bq;
+
+	buffer_t * buffer = buffer_queue_get_drain_buffer(bq);
+
+	if( buffer ) {
+		SLresult result = ( *p->bufferQueueItf )->Enqueue(p->bufferQueueItf, buffer->buffer, buffer->bytes_used);
+	}
+
+	return 0;
+}
+
+static int load(aout_handle h) {
 
 	struct priv_internal *priv = get_priv(h);
 
@@ -46,8 +61,10 @@ static int _OpenSLES_transfer(aout_handle h) {
 				break;
 		}
 
-		if(buffer->bytes_used)
+		if(buffer->bytes_used) {
 			buffer_queue_return_fill_buffer( &priv->bq );
+			enqueue(h);
+		}
 		else
 			buffer_queue_cancel_fill_buffer( &priv->bq );
 
@@ -67,7 +84,7 @@ static int is_stream_at_end(aout_handle h) {
 	return 0;
 }
 
-static int transfer(aout_handle h) {
+static int update(aout_handle h) {
 
     struct priv_internal *priv = get_priv(h);
 
@@ -79,7 +96,7 @@ static int transfer(aout_handle h) {
                 if( h->samp_resetter( h->samp_data ) == 0 )
                     continue;
 
-            if( buffer_queue_get_underflow(&priv->bq) == 1 ) {
+            if( buffer_queue_drain_buffers_in_use( &priv->bq ) == 0 ) {
 
                 aout_OpenSLES_io_rem( h );
                 return aout_stopped( h );
@@ -88,7 +105,7 @@ static int transfer(aout_handle h) {
             return 0;
         }
 
-		_OpenSLES_transfer( h );
+		load( h );
     }
 
     return 0;
@@ -98,7 +115,7 @@ int aout_OpenSLES_update(aout_handle h) {
 
     struct priv_internal *priv = get_priv(h);
 
-    int e = transfer( h );
+    int e = update( h );
 
     if( ( e == 0 ) && ( h->status & AOUT_STATUS_PLAYING ) ) {
 

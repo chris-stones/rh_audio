@@ -25,8 +25,6 @@ typedef struct {
 	int free_drain_buffers;
 	int free_fill_buffers;
 
-	int underflow;
-
 } buffer_queue_t;
 
 int 				buffer_queue_alloc							(buffer_queue_t * bq, int buffers, int buffersize);
@@ -35,9 +33,9 @@ int 				buffer_queue_alloc_buffers					(buffer_queue_t * bq);
 void 				buffer_queue_free_buffers					(buffer_queue_t * bq);
 buffer_t * 			buffer_queue_get_drain_buffer				(buffer_queue_t * bq);
 void 				buffer_queue_return_drain_buffer			(buffer_queue_t * bq);
-buffer_t * 			buffer_queue_return_and_get_drain_buffer	(buffer_queue_t * bq);
 buffer_t * 			buffer_queue_get_fill_buffer				(buffer_queue_t * bq);
 void 				buffer_queue_return_fill_buffer				(buffer_queue_t * bq);
 void 				buffer_queue_cancel_fill_buffer				(buffer_queue_t * bq);
-int 				buffer_queue_get_underflow					(buffer_queue_t * bq);
+
+int 				buffer_queue_drain_buffers_in_use			(buffer_queue_t * bq);
 

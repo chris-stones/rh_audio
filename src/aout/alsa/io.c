@@ -210,7 +210,7 @@ static int aout_alsa_io_poll() {
 
       poll( ufds, fd_count, ms ? ms : -1 );
 
-      static int i = 0;
+//      static int i = 0;
 //      printf("alsa_io_poll %d (ms %d)\n", i++, ms);
       return 0;
     }

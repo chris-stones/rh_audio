@@ -71,15 +71,11 @@ static int _aud_sample_opener(aud_sample_handle p, const char * const fn) {
 
 			void * p = NULL;
 
-			printf("its a rh_rawpak_ctx://\n");
-
 			if(sscanf(fn+16,"%p",&p) != 1) {
 				avcodec_free_frame(&priv->pFrame);
 				free(priv);
 				return -1;
 			}
-
-			printf("loading context %p\n", p);
 
 			if(rh_rawpak_open_avformatctx( (rh_rawpak_ctx)p, 0, (void**)&priv->pFormatCtx )!=0) {
 				avcodec_free_frame(&priv->pFrame);

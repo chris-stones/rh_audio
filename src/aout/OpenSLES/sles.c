@@ -56,47 +56,11 @@ static int _OpenSLES_one_time_setup() {
 	err5: err4: err3: err2: err1: err0: return -1;
 }
 
-/*
-static void _cb(SLPlayItf caller, void * cb_data, SLuint32 event) {
-
-	rh_audiosample_handle h = (rh_audiosample_handle) (cb_data);
-
-	if( pthread_mutex_lock(&h->monitor) == 0) {
-
-		int e = -1;
-
-		int old_priv_flags = h->priv_flags;
-
-		if (event & SL_PLAYEVENT_HEADATEND ) {
-
-			destroy_channel( h->channel );
-			h->channel = NULL;
-
-			// inform waiting threads that this is finished.
-			h->priv_flags = 0;
-			pthread_cond_broadcast(&h->cond);
-
-			if(h->cb && ((old_priv_flags & PRIV_FLAG_PLAYING) == PRIV_FLAG_PLAYING))
-				(*(h->cb))(h, h->cb_data, RH_AUDIOSAMPLE_STOPPED);
-		}
-
-		pthread_mutex_unlock(&h->monitor);
-	}
-}
-*/
-
 static void _buffer_queue_cb(SLAndroidSimpleBufferQueueItf bq, void *context)
 {
-	buffer_t * db;
 	rh_audiosample_handle h = (rh_audiosample_handle)context;
-	struct priv_internal * p = get_priv(h);
 
-	db = buffer_queue_return_and_get_drain_buffer( &p->bq );
-
-    if(db) {
-        SLresult result;
-        result = ( *p->bufferQueueItf )->Enqueue(p->bufferQueueItf, db->buffer, db->bytes_used);
-    }
+    aout_OpenSLES_io_return_buffer( h ); // causes io thread to call buffer_queue_return_drain_buffer();
 }
 
 static int destroy_channel(rh_audiosample_handle h) {

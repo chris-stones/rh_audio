@@ -9,13 +9,17 @@
 #include<unistd.h>
 #include<fcntl.h>
 #include<stdio.h>
+#include<poll.h>
 
 #include"../../bucket.h"
 
+#define IO_CMD_ADD 				0
+#define IO_CMD_REMOVE 			1
+#define IO_CMD_RETURNBUFFER 	2
 
 struct io_command_struct {
 
-  int rem;
+  int cmd;
   aout_handle h;
 };
 
@@ -48,11 +52,6 @@ static int pipe_send( struct io_command_struct *cmd ) {
   char * e = (char*)(cmd+1);
   do {
 
-    /*
-     * The write end of the pipe is in blocking mode, and io_command_struct is smaller than PIPE_BUF.
-     * So write will always write the correct number of bytes,
-     * But Im paranoid!
-     */
     int i = write( io.cmd_pipe.write, p, ((size_t)e)-((size_t)p) );
 
     if(i>=0) {
@@ -105,16 +104,23 @@ static int pipe_recv( struct io_command_struct *cmd ) {
 
 int aout_OpenSLES_io_add(aout_handle h) {
 
-  struct io_command_struct cmd = { 0, h };
+  struct io_command_struct cmd = { IO_CMD_ADD, h };
 
   return pipe_send( &cmd );
 }
 
 int aout_OpenSLES_io_rem(aout_handle h) {
 
-  struct io_command_struct cmd = { 1, h };
+  struct io_command_struct cmd = { IO_CMD_REMOVE, h };
 
   return pipe_send( &cmd );
+}
+
+int aout_OpenSLES_io_return_buffer(aout_handle h) {
+
+	struct io_command_struct cmd = { IO_CMD_RETURNBUFFER, h };
+
+	return pipe_send( &cmd );
 }
 
 static int process_cmd_pipe() {
@@ -131,10 +137,23 @@ static int process_cmd_pipe() {
     if(e == 0)
       return 0;
 
-    if(cmd.rem)
-      e = bucket_remove(io.aout_handle_bucket, cmd.h);
-    else
-      e = bucket_add(io.aout_handle_bucket, cmd.h);
+    switch(cmd.cmd)
+	{
+		case IO_CMD_REMOVE:
+			e = bucket_remove(io.aout_handle_bucket, cmd.h);
+			break;
+		case IO_CMD_ADD:
+			e = bucket_add(io.aout_handle_bucket, cmd.h);
+			break;
+		case IO_CMD_RETURNBUFFER:
+		{
+			struct priv_struct * p = get_priv(cmd.h);
+			buffer_queue_t * bq = &p->bq;
+			buffer_queue_return_drain_buffer( bq );
+			e = 0;
+			break;
+		}
+	}
 
     if(e != 0)
       return -1;
@@ -143,12 +162,27 @@ static int process_cmd_pipe() {
   return 0;
 }
 
+static int poll_cmd_pipe() {
+
+	struct pollfd ufds[1];
+
+	ufds[0].fd = io.cmd_pipe.read;
+    ufds[0].revents = 0;
+    ufds[0].events = POLLIN | POLLPRI;
+
+	poll( ufds, sizeof ufds / sizeof ufds[0], -1 );
+
+	return 0;
+}
+
 static void * io_main(void * p) {
 
   aout_handle * array;
   int len;
 
   for(;;) {
+
+	poll_cmd_pipe();
 
     process_cmd_pipe();
 
