@@ -4,7 +4,7 @@
 #include<alloca.h>
 #include<pthread.h>
 #include<signal.h>
-#include<error.h>
+//#include<error.h>
 #include<errno.h>
 #include<unistd.h>
 #include<fcntl.h>
@@ -16,6 +16,7 @@
 #define IO_CMD_ADD 				0
 #define IO_CMD_REMOVE 			1
 #define IO_CMD_RETURNBUFFER 	2
+#define IO_CMD_EXIT				3
 
 struct io_command_struct {
 
@@ -26,7 +27,7 @@ struct io_command_struct {
 struct io_struct {
 
   pthread_mutex_t monitor;
-  pthread_t thread;
+  volatile pthread_t thread;
   bucket_handle aout_handle_bucket;
 
   struct {
@@ -123,6 +124,13 @@ int aout_OpenSLES_io_return_buffer(aout_handle h) {
 	return pipe_send( &cmd );
 }
 
+static int aout_OpenSLES_io_exit() {
+
+	struct io_command_struct cmd = { IO_CMD_EXIT, NULL };
+
+	return pipe_send( &cmd );
+}
+
 static int process_cmd_pipe() {
 
   struct io_command_struct cmd;
@@ -147,12 +155,16 @@ static int process_cmd_pipe() {
 			break;
 		case IO_CMD_RETURNBUFFER:
 		{
-			struct priv_struct * p = get_priv(cmd.h);
+			struct priv_internal * p = get_priv(cmd.h);
 			buffer_queue_t * bq = &p->bq;
 			buffer_queue_return_drain_buffer( bq );
 			e = 0;
 			break;
 		}
+		case IO_CMD_EXIT:
+			io.thread = 0;
+			pthread_exit(NULL);
+			break;
 	}
 
     if(e != 0)
@@ -209,9 +221,12 @@ static int _aout_OpenSLES_io_setup() {
 
   if(bucket_create(&io.aout_handle_bucket) != 0)
     goto err2;
-
-  if(pthread_create(&io.thread, NULL, &io_main, NULL) != 0)
-    goto err3;
+  {
+	  pthread_t thread;
+	  if(pthread_create(&thread, NULL, &io_main, NULL) != 0)
+		  goto err3;
+	  io.thread = thread;
+  }
 
   pthread_detach( io.thread );
 
@@ -247,13 +262,12 @@ int aout_OpenSLES_io_setup() {
 
 int aout_OpenSLES_io_teardown() {
 
-  pthread_cancel(io.thread);
-//pthread_cond_signal(&io.cond);
-//pthread_kill(io.thread, SIGIO);
-//pthread_join(io.thread, NULL);
-  io.thread = 0;
-
-  return 0;
+	if(io.thread) {
+		aout_OpenSLES_io_exit();
+		while(io.thread)
+			sched_yield();
+	}
+	return 0;
 }
 
 

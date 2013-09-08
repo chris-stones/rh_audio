@@ -88,24 +88,29 @@ static int update(aout_handle h) {
 
     struct priv_internal *priv = get_priv(h);
 
-    if( h->status & AOUT_STATUS_PLAYING ) {
+    for(;;) {
 
-        if( is_stream_at_end( h ) ) {
+		if( h->status & AOUT_STATUS_PLAYING ) {
 
-            if(h->status & AOUT_STATUS_LOOPING)
-                if( h->samp_resetter( h->samp_data ) == 0 )
-                    continue;
+			if( is_stream_at_end( h ) ) {
 
-            if( buffer_queue_drain_buffers_in_use( &priv->bq ) == 0 ) {
+				if(h->status & AOUT_STATUS_LOOPING)
+					if( h->samp_resetter( h->samp_data ) == 0 )
+						continue;
 
-                aout_OpenSLES_io_rem( h );
-                return aout_stopped( h );
-            }
+				if( buffer_queue_drain_buffers_in_use( &priv->bq ) == 0 ) {
 
-            return 0;
-        }
+					aout_OpenSLES_io_rem( h );
+					return aout_stopped( h );
+				}
 
-		load( h );
+				return 0;
+			}
+
+			load( h );
+
+			return 0;
+		}
     }
 
     return 0;

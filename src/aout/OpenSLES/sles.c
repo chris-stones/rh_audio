@@ -58,12 +58,12 @@ static int _OpenSLES_one_time_setup() {
 
 static void _buffer_queue_cb(SLAndroidSimpleBufferQueueItf bq, void *context)
 {
-	rh_audiosample_handle h = (rh_audiosample_handle)context;
+	aout_handle h = (aout_handle)context;
 
     aout_OpenSLES_io_return_buffer( h ); // causes io thread to call buffer_queue_return_drain_buffer();
 }
 
-static int destroy_channel(rh_audiosample_handle h) {
+static int destroy_channel(aout_handle h) {
 
 	struct priv_internal * p = get_priv(h);
 
@@ -78,7 +78,7 @@ static int destroy_channel(rh_audiosample_handle h) {
 	return 0;
 }
 
-static int create_channel(rh_audiosample_handle h) {
+static int create_channel(aout_handle h) {
 
 	off_t start;
 	off_t length;

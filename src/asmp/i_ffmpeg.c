@@ -72,13 +72,13 @@ static int _aud_sample_opener(aud_sample_handle p, const char * const fn) {
 			void * p = NULL;
 
 			if(sscanf(fn+16,"%p",&p) != 1) {
-				avcodec_free_frame(&priv->pFrame);
+				av_freep(&priv->pFrame);
 				free(priv);
 				return -1;
 			}
 
 			if(rh_rawpak_open_avformatctx( (rh_rawpak_ctx)p, 0, (void**)&priv->pFormatCtx )!=0) {
-				avcodec_free_frame(&priv->pFrame);
+				av_freep(&priv->pFrame);
 				free(priv);
 				return -1;
 			}
@@ -86,7 +86,7 @@ static int _aud_sample_opener(aud_sample_handle p, const char * const fn) {
 		else {
 
 			if(avformat_open_input(&priv->pFormatCtx, fn, NULL, NULL)!=0) {
-				avcodec_free_frame(&priv->pFrame);
+				av_freep(&priv->pFrame);
 				free(priv);
 				return -1;
 			}
@@ -94,7 +94,7 @@ static int _aud_sample_opener(aud_sample_handle p, const char * const fn) {
 	}
 
     if(avformat_find_stream_info(priv->pFormatCtx, NULL)<0) {
-		avcodec_free_frame(&priv->pFrame);
+    	av_freep(&priv->pFrame);
 		avformat_close_input(&priv->pFormatCtx);
 		free(priv);
 		return -1;
@@ -111,7 +111,7 @@ static int _aud_sample_opener(aud_sample_handle p, const char * const fn) {
 	}
 
 	if(priv->firstAudioStream == -1) {
-		avcodec_free_frame(&priv->pFrame);
+		av_freep(&priv->pFrame);
 		avformat_close_input(&priv->pFormatCtx);
 		free(priv);
 		return -1;
@@ -122,7 +122,7 @@ static int _aud_sample_opener(aud_sample_handle p, const char * const fn) {
 	if((priv->pCodec=avcodec_find_decoder(priv->pCodecCtx->codec_id)) == NULL) {
 
 		avformat_close_input(&priv->pFormatCtx);
-		avcodec_free_frame(&priv->pFrame);
+		av_freep(&priv->pFrame);
 		free(priv);
 		return -1;
 	}
@@ -130,7 +130,7 @@ static int _aud_sample_opener(aud_sample_handle p, const char * const fn) {
 	if(avcodec_open2(priv->pCodecCtx, priv->pCodec, NULL)<0) {
 
 		avformat_close_input(&priv->pFormatCtx);
-		avcodec_free_frame(&priv->pFrame);
+		av_freep(&priv->pFrame);
 		free(priv);
 		return -1;
 	}
@@ -195,8 +195,8 @@ static int _aud_sample_reader(aud_sample_handle p, int samples, void * dst, size
 
 	// FIXME - ASSUMING S16
 	memcpy( dst,
-			((char *)priv->pFrame->data[0]) + (priv->pFrame->channels * 2 * priv->processedSamples),
-			samples * priv->pFrame->channels * 2);
+			((char *)priv->pFrame->data[0]) + (priv->pCodecCtx->channels * 2 * priv->processedSamples),
+			samples * priv->pCodecCtx->channels * 2);
 
 	priv->processedSamples += samples;
 
@@ -223,7 +223,7 @@ static int _aud_sample_closer(aud_sample_handle p) {
 
   avcodec_close( get_codec_ctx(p) );
   avformat_close_input( &priv->pFormatCtx );
-  avcodec_free_frame(&priv->pFrame);
+  av_freep(&priv->pFrame);
   free(p->priv);
   p->priv = NULL;
 

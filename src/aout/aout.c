@@ -143,10 +143,14 @@ static int mutex_init(pthread_mutex_t *mutex, int recursize, int errorcheck, int
     else if(errorcheck)
       pthread_mutexattr_settype( &attr, PTHREAD_MUTEX_ERRORCHECK);
 
+#ifdef __ANDROID__
+    assert(!robust && "Android does not support robust mutexes");
+#else
     if(robust)
       pthread_mutexattr_setrobust( &attr, PTHREAD_MUTEX_ROBUST );
     else
       pthread_mutexattr_setrobust( &attr, PTHREAD_MUTEX_STALLED );
+#endif
 
     if ( pthread_mutex_init(mutex, &attr) == 0 )
       ret = 0;
