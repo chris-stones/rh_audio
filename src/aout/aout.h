@@ -21,7 +21,7 @@ typedef enum {
 typedef int(*aout_sample_reader)	(void * samp_data, int frames, void * p, size_t size);
 typedef int(*aout_sample_stater)	(void * samp_data);
 typedef int(*aout_sample_resetter)	(void * samp_data);
-typedef int(*aout_cb)(aout_handle p, void * samp_data, void * cb_data, aout_cb_event_enum_t ev, ...);
+typedef int(*aout_cb)(aout_handle p, void * samp_data, void * cb_data, aout_cb_event_enum_t ev);
 
 int aout_open(aout_handle * h, unsigned int chanels, unsigned int rate);
 int aout_open_r(aout_handle * h, unsigned int chanels, unsigned int rate);

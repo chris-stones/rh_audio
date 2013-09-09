@@ -197,7 +197,7 @@ static sample_channel_pair_ptr find_free_channel(sample_channel_pair_ptr * array
   return NULL;
 }
 
-static _cb(aout_handle p, void * samp_data, void * cb_data, aout_cb_event_enum_t ev, ...) {
+static int _cb(aout_handle p, void * samp_data, void * cb_data, aout_cb_event_enum_t ev) {
 
   rh_audiosample_handle h = (rh_audiosample_handle)( cb_data );
 
@@ -341,35 +341,24 @@ int rh_audiosample_stop( rh_audiosample_handle h ) {
 
 int rh_audiosample_isplaying ( rh_audiosample_handle h ) {
 
-  int err = -1;
+  int err = -2;
 
   if( pthread_mutex_lock(&h->monitor) == 0 ) {
 
-    sample_channel_pair_ptr p = find_sample_from_bucket( h->sample );
+	sample_channel_pair_ptr p = find_sample_from_bucket( h->sample );
+
+	err = -1;
 
     if(p) {
       err = 0;
       if( aout_running( p->channel ) == 1 )
-	err = 1;
+    	  err = 1;
     }
     pthread_mutex_unlock( &h->monitor );
   }
 
   return err;
 }
-
-//int rh_audiosample_seek ( rh_audiosample_handle h, int offset, int whence ) {
-//
-//  int err = -1;
-//
-//  if( pthread_mutex_lock( &h->monitor ) == 0 ) {
-//
-//    err = asmp_seek( h->sample, offset, whence );
-//
-//    pthread_mutex_unlock( &h->monitor );
-//  }
-//  return err;
-//}
 
 int rh_audiosample_register_cb	( rh_audiosample_handle h, rh_audiosample_cb_type cb, void * cb_data ) {
 

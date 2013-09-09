@@ -12,7 +12,6 @@
 extern "C" {
 #endif
 
-
 static bucket_handle sample_bucket = 0;
 
 int rh_audiosample_add_to_internal_bucket( rh_audiosample_handle sample ) {
