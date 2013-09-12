@@ -10,6 +10,12 @@
 int aout_init_interface_ALSA(aout_handle p);
 int aout_init_interface_OpenSLES(aout_handle p);
 
+int aout_create_ALSA();
+int aout_destroy_ALSA();
+
+int aout_create_OpenSLES();
+int aout_destroy_OpenSLES();
+
 typedef int(*aout_channel_open)(aout_handle p, unsigned int channels, unsigned int rate);
 typedef int(*aout_channel_close)(aout_handle p);
 typedef int(*aout_channel_start)(aout_handle p);

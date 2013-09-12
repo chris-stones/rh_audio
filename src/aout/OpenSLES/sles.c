@@ -11,9 +11,6 @@ static int _OpenSLES_one_time_setup() {
 			SL_BOOLEAN_TRUE },
 			{ SL_ENGINEOPTION_LOSSOFCONTROL, SL_BOOLEAN_FALSE }, };
 
-	if(openSLES.is_setup)
-		return 0;
-
 	if( aout_OpenSLES_io_setup() != 0 )
 		goto err0;
 
@@ -48,12 +45,26 @@ static int _OpenSLES_one_time_setup() {
 					SL_BOOLEAN_FALSE ))
 		goto err5;
 
-
-	openSLES.is_setup = 1;
-
 	return 0;
 
 	err5: err4: err3: err2: err1: err0: return -1;
+}
+
+static int _OpenSLES_one_time_shutdown() {
+
+	aout_OpenSLES_io_teardown();
+
+	if( openSLES.outputMix )
+		(*openSLES.outputMix)->Destroy(openSLES.outputMix);
+
+	if( openSLES.engineObject )
+		(*openSLES.engineObject)->Destroy(openSLES.engineObject);
+
+	openSLES.engineObject = NULL;
+	openSLES.engineItf = NULL;
+	openSLES.outputMix = NULL;
+
+	return 0;
 }
 
 static void _buffer_queue_cb(SLAndroidSimpleBufferQueueItf bq, void *context)
@@ -158,7 +169,7 @@ int aout_OpenSLES_open(aout_handle h, unsigned int channels, unsigned int rate) 
 		h->priv = p;
 
 		// FIXME: more assuming formats!!!
-		buffer_queue_alloc( &p->bq, 2, 2 * channels * rate ); // 2 one second buffers ( assumeing 16bit )
+		buffer_queue_alloc( &p->bq, 2, 2 * channels * rate ); // 2 one second buffers ( assuming 16bit )
 		buffer_queue_alloc_buffers(&p->bq);
 
 		create_channel(h);
@@ -224,6 +235,17 @@ int aout_init_interface_OpenSLES(aout_handle p) {
     p->channel_open 	= &aout_OpenSLES_open;
     p->channel_close 	= &aout_OpenSLES_close;
 
-    return _OpenSLES_one_time_setup(); // TODO: use pthread_once();
+    return 0;
 }
+
+int aout_create_OpenSLES() {
+
+	return _OpenSLES_one_time_setup();
+}
+
+int aout_destroy_OpenSLES() {
+
+	return _OpenSLES_one_time_shutdown();
+}
+
 

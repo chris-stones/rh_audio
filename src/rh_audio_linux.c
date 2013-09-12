@@ -30,53 +30,51 @@ struct rh_audiosample_type {
 };
 
 static bucket_handle channel_bucket = 0;
+
 typedef struct {
   asmp_handle 	sample;
   aout_handle	channel;
 } sample_channel_pair_t;
 typedef sample_channel_pair_t* sample_channel_pair_ptr;
 
-static pthread_mutex_t init_mutex = PTHREAD_MUTEX_INITIALIZER;
-static int isInitialised = 0;
-
 int rh_audiosample_setup() {
 
-  int err = -1;
+	int err = -1;
 
-  if(isInitialised)
-    return 0;
+	aout_register_default_sample_readfunc( (aout_sample_reader)&asmp_read );
+	aout_register_default_sample_resetfunc( (aout_sample_resetter)&asmp_reset );
+	aout_register_default_sample_statfunc( (aout_sample_stater)&asmp_stat );
 
-  if(pthread_mutex_lock( &init_mutex ) == 0) {
+	err = bucket_create( &channel_bucket );
 
-    if(isInitialised) {
+	if( !err )
+		err = rh_audiosample_create_internal_bucket();
 
-      err = 0;
+#ifdef __ANDROID__
+	if( !err )
+		err = aout_create_OpenSLES();
+#else
+	if( !err )
+		err = aout_create_ALSA();
+#endif
 
-    } else {
-
-      aout_register_default_sample_readfunc( (aout_sample_reader)&asmp_read );
-      aout_register_default_sample_resetfunc( (aout_sample_resetter)&asmp_reset );
-      aout_register_default_sample_statfunc( (aout_sample_stater)&asmp_stat );
-
-      err = bucket_create( &channel_bucket );
-
-      if(!err)
-		isInitialised = 1;
-    }
-
-    pthread_mutex_unlock( &init_mutex );
-  }
-
-  return err;
+	return err;
 }
 
 int rh_audiosample_shutdown() {
 
-  int e = bucket_free( channel_bucket );
+  int e0 = bucket_free( channel_bucket );
+  int e1 = rh_audiosample_destroy_internal_bucket();
+
+#ifdef __ANDROID__
+  int e2 = aout_destroy_OpenSLES();
+#else
+  int e2 = aout_destroy_ALSA();
+#endif
 
   channel_bucket = NULL;
 
-  return e;
+  return (e0 | e1 | e2);
 }
 
 int rh_audiosample_open	( rh_audiosample_handle * out, const char * source, int flags ) {

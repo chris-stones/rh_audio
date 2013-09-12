@@ -15,7 +15,6 @@
 
 struct openSLES {
 
-	int is_setup;
 	SLObjectItf engineObject;
 	SLEngineItf engineItf;
 	SLObjectItf outputMix;

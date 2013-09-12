@@ -30,7 +30,9 @@ static inline int cond_timedwait_and_unlock_if_cancelled(pthread_cond_t * cond, 
   pthread_cleanup_pop(0);
   return err;
 }
-  
+
+int rh_audiosample_create_internal_bucket();
+int rh_audiosample_destroy_internal_bucket();
 int rh_audiosample_add_to_internal_bucket	( rh_audiosample_handle sample );
 int rh_audiosample_remove_from_internal_bucket	( rh_audiosample_handle sample );
 

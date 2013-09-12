@@ -26,7 +26,6 @@ struct io_command_struct {
 
 struct io_struct {
 
-  pthread_mutex_t monitor;
   volatile pthread_t thread;
   bucket_handle aout_handle_bucket;
 
@@ -34,17 +33,13 @@ struct io_struct {
     int read;
     int write;
   } cmd_pipe;
-
-  int is_initialised;
 } ;
 
 static struct io_struct io = {
 
-  PTHREAD_MUTEX_INITIALIZER,
   0,
   0,
   {0,0},
-  0
 };
 
 static int pipe_send( struct io_command_struct *cmd ) {
@@ -211,7 +206,9 @@ static void * io_main(void * p) {
   return NULL;
 }
 
-static int _aout_OpenSLES_io_setup() {
+int aout_OpenSLES_io_setup() {
+
+  memset(&io, 0, sizeof io);
 
   if( pipe( &io.cmd_pipe.read ) != 0 )
     goto err0;
@@ -230,8 +227,6 @@ static int _aout_OpenSLES_io_setup() {
 
   pthread_detach( io.thread );
 
-  io.is_initialised = 1;
-
   return 0;
 
 err3:
@@ -244,22 +239,6 @@ err0:
   return -1;
 }
 
-int aout_OpenSLES_io_setup() {
-
-  int e = -1;
-
-  if( pthread_mutex_lock( &io.monitor ) == 0 ) {
-
-    e = 0;
-    if(!io.is_initialised)
-      e = _aout_OpenSLES_io_setup();
-
-    pthread_mutex_unlock( &io.monitor );
-  }
-
-  return e;
-}
-
 int aout_OpenSLES_io_teardown() {
 
 	if(io.thread) {
@@ -267,7 +246,15 @@ int aout_OpenSLES_io_teardown() {
 		while(io.thread)
 			sched_yield();
 	}
+
+	bucket_free(io.aout_handle_bucket);
+	io.aout_handle_bucket = NULL;
+
+	close(io.cmd_pipe.write);
+	io.cmd_pipe.write = 0;
+
+	close(io.cmd_pipe.read);
+	io.cmd_pipe.read = 0;
+
 	return 0;
 }
-
-
