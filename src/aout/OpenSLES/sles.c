@@ -107,9 +107,13 @@ static int create_channel(aout_handle h) {
 
 		// configure audio source
 		SLDataLocator_AndroidSimpleBufferQueue loc_bufq = {SL_DATALOCATOR_ANDROIDSIMPLEBUFFERQUEUE, p->bq.nb_buffers};
-		SLDataFormat_PCM format_pcm = {SL_DATAFORMAT_PCM, 1, SL_SAMPLINGRATE_8,
+		SLDataFormat_PCM format_pcm =
+		{
+			SL_DATAFORMAT_PCM, 2, SL_SAMPLINGRATE_44_1,
 			SL_PCMSAMPLEFORMAT_FIXED_16, SL_PCMSAMPLEFORMAT_FIXED_16,
-			SL_SPEAKER_FRONT_CENTER, SL_BYTEORDER_LITTLEENDIAN};
+			SL_SPEAKER_FRONT_LEFT | SL_SPEAKER_FRONT_RIGHT,
+			SL_BYTEORDER_LITTLEENDIAN
+		};
 		SLDataSource audioSrc = {&loc_bufq, &format_pcm};
 
 		// configure audio sink
@@ -169,7 +173,8 @@ int aout_OpenSLES_open(aout_handle h, unsigned int channels, unsigned int rate) 
 		h->priv = p;
 
 		// FIXME: more assuming formats!!!
-		buffer_queue_alloc( &p->bq, 2, 2 * channels * rate ); // 2 one second buffers ( assuming 16bit )
+		buffer_queue_alloc( &p->bq, 3, 2 * channels * rate ); // 3 one second buffers ( assuming 16bit )
+
 		buffer_queue_alloc_buffers(&p->bq);
 
 		create_channel(h);

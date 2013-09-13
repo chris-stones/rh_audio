@@ -11,6 +11,9 @@ static int enqueue(aout_handle h) {
 	buffer_t * buffer = buffer_queue_get_drain_buffer(bq);
 
 	if( buffer ) {
+
+		LOGE("enqueue %p ( %d bytes )", buffer->buffer, buffer->bytes_used);
+
 		SLresult result = ( *p->bufferQueueItf )->Enqueue(p->bufferQueueItf, buffer->buffer, buffer->bytes_used);
 	}
 
@@ -68,7 +71,7 @@ static int load(aout_handle h) {
 		else
 			buffer_queue_cancel_fill_buffer( &priv->bq );
 
-		// cant read anymore audio from stream.
+		// can't read anymore audio from stream.
 		if(framesRead <= 0)
 			break;
 	}

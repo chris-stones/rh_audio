@@ -16,7 +16,7 @@ typedef struct {
 
 	int buffersize;
 
-	buffer_t ** buffers;
+	buffer_t * buffers;
 	int nb_buffers;
 
 	buffer_t * drain_buffer;
