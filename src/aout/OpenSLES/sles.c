@@ -219,10 +219,6 @@ int aout_OpenSLES_stop( aout_handle h) {
 
   if( h->status & AOUT_STATUS_PLAYING ) {
 
-	struct priv_internal * p = get_priv(h);
-
-	(*p->playItf)->SetPlayState( p->playItf, SL_PLAYSTATE_STOPPED );
-
     aout_OpenSLES_io_rem(h);
 
     aout_stopped( h );

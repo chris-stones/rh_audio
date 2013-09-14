@@ -2,24 +2,38 @@
 #include "buffer_queue.h"
 #include "sles.h"
 
-//#define BUFFER_QUEUE_THREAD_SAFE 1
-
-static inline int mutex_lock(pthread_mutex_t * m) {
-
 #if defined(BUFFER_QUEUE_THREAD_SAFE)
-	return pthread_mutex_lock(m);
+#define mutex_lock(M) 	pthread_mutex_lock(M);
+#define mutex_unlock(M) pthread_unmutex_lock(M);
 #else
-	return 0;
+#define mutex_lock(M) 0
+#define mutex_unlock(M)
 #endif
+
+static void _buffer_queue_reset(buffer_queue_t * bq) {
+
+	bq->drain_buffer =
+	bq->fill_buffer =
+	bq->buffers;
+
+	bq->free_drain_buffers = 0;
+	bq->free_fill_buffers = bq->nb_buffers;
 }
 
-static inline int mutex_unlock(pthread_mutex_t * m) {
+int buffer_queue_reset(buffer_queue_t * bq) {
 
-#if defined(BUFFER_QUEUE_THREAD_SAFE)
-	return pthread_mutex_unlock(m);
-#else
-	return 0;
-#endif
+	int i = -1;
+
+	if( mutex_lock( &bq->monitor ) == 0 ) {
+
+		_buffer_queue_reset(bq);
+
+		mutex_unlock( &bq->monitor );
+
+		i = 0;
+	}
+
+	return i;
 }
 
 int buffer_queue_drain_buffers_in_use(buffer_queue_t * bq) {
@@ -183,12 +197,7 @@ int buffer_queue_alloc_buffers(buffer_queue_t * bq) {
 			}
 		}
 
-		bq->drain_buffer =
-		bq->fill_buffer =
-		bq->buffers;
-
-		bq->free_drain_buffers = 0;
-		bq->free_fill_buffers = bq->nb_buffers;
+		_buffer_queue_reset(bq);
 
 		return 0;
 	}

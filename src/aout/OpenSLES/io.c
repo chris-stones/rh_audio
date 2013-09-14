@@ -143,8 +143,19 @@ static int process_cmd_pipe() {
     switch(cmd.cmd)
 	{
 		case IO_CMD_REMOVE:
+		{
+			struct priv_internal * p = get_priv(cmd.h);
+
+			(*p->playItf)->SetPlayState( p->playItf, SL_PLAYSTATE_STOPPED );
+
+			(*p->bufferQueueItf)->Clear(p->bufferQueueItf);
+
+			buffer_queue_reset( &p->bq );
+
 			e = bucket_remove(io.aout_handle_bucket, cmd.h);
+
 			break;
+		}
 		case IO_CMD_ADD:
 			e = bucket_add(io.aout_handle_bucket, cmd.h);
 			break;

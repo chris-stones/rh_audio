@@ -3,6 +3,8 @@
 
 #include<pthread.h>
 
+//#define BUFFER_QUEUE_THREAD_SAFE 1
+
 typedef struct {
 
 	void * buffer;
@@ -12,7 +14,9 @@ typedef struct {
 
 typedef struct {
 
+#ifdef BUFFER_QUEUE_THREAD_SAFE
 	pthread_mutex_t monitor;
+#endif
 
 	int buffersize;
 
@@ -27,6 +31,7 @@ typedef struct {
 
 } buffer_queue_t;
 
+int 				buffer_queue_reset							(buffer_queue_t * bq);
 int 				buffer_queue_alloc							(buffer_queue_t * bq, int buffers, int buffersize);
 void 				buffer_queue_free							(buffer_queue_t * bq);
 int 				buffer_queue_alloc_buffers					(buffer_queue_t * bq);
