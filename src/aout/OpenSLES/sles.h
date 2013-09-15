@@ -32,6 +32,10 @@ struct priv_internal {
 //	SLSeekItf seekItf;
 	SLAndroidSimpleBufferQueueItf bufferQueueItf;
 
+	int channels;
+	int samplerate;
+	int samplesize;
+
 	buffer_queue_t bq;
 };
 
@@ -40,7 +44,7 @@ static inline struct priv_internal * get_priv(aout_handle p) {
   return (struct priv_internal *)p->priv;
 }
 
-int aout_OpenSLES_open(aout_handle h, unsigned int channels, unsigned int rate);
+int aout_OpenSLES_open(aout_handle h, unsigned int channels, unsigned int rate, unsigned int samplesize);
 int aout_OpenSLES_close(aout_handle h);
 int aout_OpenSLES_update( aout_handle h);
 int aout_OpenSLES_start( aout_handle h);

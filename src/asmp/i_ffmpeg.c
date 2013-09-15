@@ -138,8 +138,31 @@ static int _aud_sample_opener(aud_sample_handle p, const char * const fn) {
     p->priv = (void*)priv;
 
     p->channels 	= priv->pCodecCtx->channels;
-//	p->frames		= priv->pCodecCtx->;
     p->samplerate 	= priv->pCodecCtx->sample_rate;
+    p->samplesize	= 2;
+
+    switch(priv->pCodecCtx->sample_fmt) {
+    case AV_SAMPLE_FMT_U8:          ///< unsigned 8 bits
+    case AV_SAMPLE_FMT_U8P:         ///< unsigned 8 bits, planar
+    	p->samplesize	= 1;
+    	break;
+    case AV_SAMPLE_FMT_S16:         ///< signed 16 bits
+    case AV_SAMPLE_FMT_S16P:        ///< signed 16 bits, planar
+    	p->samplesize	= 2;
+    	break;
+    case AV_SAMPLE_FMT_S32:         ///< signed 32 bits
+    case AV_SAMPLE_FMT_S32P:        ///< signed 32 bits, planar
+    	p->samplesize	= 4;
+    	break;
+    case AV_SAMPLE_FMT_FLT:         ///< float
+    case AV_SAMPLE_FMT_FLTP:        ///< float, planar
+    	p->samplesize	= 4;
+    	break;
+    case AV_SAMPLE_FMT_DBL:         ///< double
+    case AV_SAMPLE_FMT_DBLP:        ///< double, planar
+    	p->samplesize	= 8;
+    	break;
+    }
 
 	if( priv->pCodecCtx->sample_fmt != AV_SAMPLE_FMT_S16 )
 		printf("ERROR: audio native format is not S16, we will have to re-sample (TODO)\n");
@@ -193,10 +216,9 @@ static int _aud_sample_reader(aud_sample_handle p, int samples, void * dst, size
 			samples = samplesRemainingInFrame;
 	}
 
-	// FIXME - ASSUMING S16
 	memcpy( dst,
-			((char *)priv->pFrame->data[0]) + (priv->pCodecCtx->channels * 2 * priv->processedSamples),
-			samples * priv->pCodecCtx->channels * 2);
+			((char *)priv->pFrame->data[0]) + (p->channels * p->samplesize * priv->processedSamples),
+			samples * p->channels * p->samplesize);
 
 	priv->processedSamples += samples;
 

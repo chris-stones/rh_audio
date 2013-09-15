@@ -19,11 +19,10 @@ int asmp_close(aud_sample_handle p);
 int asmp_stat(aud_sample_handle p);
 int asmp_reset(aud_sample_handle p);
 int asmp_read(aud_sample_handle p, int frames, void * dst, size_t dst_size);
-//int asmp_async_read(aud_sample_handle p, int frames, void * dst, size_t dst_size);
+
 int asmp_get_channels(aud_sample_handle p);
-//size_t asmp_size(aud_sample_handle p);
 int asmp_get_samplerate(aud_sample_handle p);
-int asmp_get_seekable(aud_sample_handle p);
+int asmp_get_samplesize(aud_sample_handle p);
 
 #ifdef __cplusplus
 } // extern "C" {

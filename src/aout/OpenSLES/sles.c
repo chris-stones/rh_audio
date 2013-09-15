@@ -89,6 +89,21 @@ static int destroy_channel(aout_handle h) {
 	return 0;
 }
 
+
+
+static SLuint32 _sles_get_channelmask(int channels) {
+
+	switch(channels) {
+	default:
+	case 0:
+		return 0;
+	case 1:
+		return SL_SPEAKER_FRONT_CENTER;
+	case 2:
+		return SL_SPEAKER_FRONT_LEFT | SL_SPEAKER_FRONT_RIGHT;
+	}
+}
+
 static int create_channel(aout_handle h) {
 
 	off_t start;
@@ -102,6 +117,8 @@ static int create_channel(aout_handle h) {
 	{
 		int e = 0;
 
+		SLuint32 channelMask = _sles_get_channelmask(p->channels);
+
 		const SLInterfaceID ids[] = { SL_IID_SEEK, SL_IID_BUFFERQUEUE };
 		const SLboolean req[] = { SL_BOOLEAN_FALSE, SL_BOOLEAN_TRUE };
 
@@ -109,9 +126,12 @@ static int create_channel(aout_handle h) {
 		SLDataLocator_AndroidSimpleBufferQueue loc_bufq = {SL_DATALOCATOR_ANDROIDSIMPLEBUFFERQUEUE, p->bq.nb_buffers};
 		SLDataFormat_PCM format_pcm =
 		{
-			SL_DATAFORMAT_PCM, 2, SL_SAMPLINGRATE_44_1,
-			SL_PCMSAMPLEFORMAT_FIXED_16, SL_PCMSAMPLEFORMAT_FIXED_16,
-			SL_SPEAKER_FRONT_LEFT | SL_SPEAKER_FRONT_RIGHT,
+			SL_DATAFORMAT_PCM,
+			p->channels,
+			p->samplerate * 1000,
+			p->samplesize * 8,
+			p->samplesize * 8,
+			channelMask,
 			SL_BYTEORDER_LITTLEENDIAN
 		};
 		SLDataSource audioSrc = {&loc_bufq, &format_pcm};
@@ -164,16 +184,18 @@ static int create_channel(aout_handle h) {
 	return 0;
 }
 
-int aout_OpenSLES_open(aout_handle h, unsigned int channels, unsigned int rate) {
+int aout_OpenSLES_open(aout_handle h, unsigned int channels, unsigned int rate, unsigned int samplesize) {
 
 	struct priv_internal * p = calloc(1, sizeof(struct priv_internal) );
 
 	if( p ) {
 
+		p->channels = channels;
+		p->samplerate = rate;
+		p->samplesize = samplesize;
 		h->priv = p;
 
-		// FIXME: more assuming formats!!!
-		buffer_queue_alloc( &p->bq, 3, 2 * channels * rate ); // 3 one second buffers ( assuming 16bit )
+		buffer_queue_alloc( &p->bq, 3, p->samplesize * p->channels * p->samplerate ); // 3 one second buffers ( assuming 16bit )
 
 		buffer_queue_alloc_buffers(&p->bq);
 

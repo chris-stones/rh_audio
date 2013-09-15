@@ -16,7 +16,7 @@ int aout_destroy_ALSA();
 int aout_create_OpenSLES();
 int aout_destroy_OpenSLES();
 
-typedef int(*aout_channel_open)(aout_handle p, unsigned int channels, unsigned int rate);
+typedef int(*aout_channel_open)(aout_handle p, unsigned int channels, unsigned int rate, unsigned int samplesize);
 typedef int(*aout_channel_close)(aout_handle p);
 typedef int(*aout_channel_start)(aout_handle p);
 typedef int(*aout_channel_stop)(aout_handle p);
