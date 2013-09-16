@@ -30,53 +30,68 @@ struct rh_audiosample_type {
 };
 
 static bucket_handle channel_bucket = 0;
+
 typedef struct {
   asmp_handle 	sample;
   aout_handle	channel;
 } sample_channel_pair_t;
 typedef sample_channel_pair_t* sample_channel_pair_ptr;
 
-static pthread_mutex_t init_mutex = PTHREAD_MUTEX_INITIALIZER;
-static int isInitialised = 0;
-
 int rh_audiosample_setup() {
 
-  int err = -1;
+	int err = -1;
 
-  if(isInitialised)
-    return 0;
+	aout_register_default_sample_readfunc( (aout_sample_reader)&asmp_read );
+	aout_register_default_sample_resetfunc( (aout_sample_resetter)&asmp_reset );
+	aout_register_default_sample_statfunc( (aout_sample_stater)&asmp_stat );
 
-  if(pthread_mutex_lock( &init_mutex ) == 0) {
+	err = bucket_create( &channel_bucket );
 
-    if(isInitialised) {
+	if( !err )
+		err = rh_audiosample_create_internal_bucket();
 
-      err = 0;
+#ifdef __ANDROID__
+	if( !err )
+		err = aout_create_OpenSLES();
+#else
+	if( !err )
+		err = aout_create_ALSA();
+#endif
 
-    } else {
-
-      aout_register_default_sample_readfunc( (aout_sample_reader)&asmp_read );
-      aout_register_default_sample_resetfunc( (aout_sample_resetter)&asmp_reset );
-      aout_register_default_sample_statfunc( (aout_sample_stater)&asmp_stat );
-
-      err = bucket_create( &channel_bucket );
-
-      if(!err)
-		isInitialised = 1;
-    }
-
-    pthread_mutex_unlock( &init_mutex );
-  }
-
-  return err;
+	return err;
 }
 
 int rh_audiosample_shutdown() {
 
-  int e = bucket_free( channel_bucket );
+  sample_channel_pair_ptr * array;
+  int len;
+
+  int e0,e1,e2;
+
+  if( bucket_lock( channel_bucket, (void***)&array, &len ) == 0 ) {
+
+	 int i;
+	 for(i=0;i<len;i++)
+		if(array[i]->channel) {
+			aout_close(array[i]->channel);
+			array[i]->channel = NULL;
+		}
+
+	  bucket_unlock( channel_bucket );
+  }
+
+  e0 = bucket_free( channel_bucket );
+  e1 = rh_audiosample_destroy_internal_bucket();
+
+#ifdef __ANDROID__
+  e2 = aout_destroy_OpenSLES();
+#else
+  e2 = aout_destroy_ALSA();
+#endif
 
   channel_bucket = NULL;
 
-  return e;
+  return (e0 | e1 | e2);
 }
 
 int rh_audiosample_open	( rh_audiosample_handle * out, const char * source, int flags ) {
@@ -130,12 +145,13 @@ int rh_audiosample_close( rh_audiosample_handle h ) {
 
     	rh_audiosample_remove_from_internal_bucket( h );
 
-      if(pthread_mutex_lock(&h->monitor)==0)
-    	  pthread_mutex_unlock(&h->monitor);
+    	if(pthread_mutex_lock(&h->monitor)==0)
+    		pthread_mutex_unlock(&h->monitor);
 
-      pthread_mutex_destroy( &h->monitor );
-      if((h->flags & RH_AUDIOSAMPLE_DONTCOPYSRC)==0) free((void*)(h->src));
-      free(h);
+    	pthread_mutex_destroy( &h->monitor );
+    	if((h->flags & RH_AUDIOSAMPLE_DONTCOPYSRC)==0)
+    		free((void*)(h->src));
+    	free(h);
     }
     return 0;
 }
@@ -151,12 +167,16 @@ static int ensure_sample_open(rh_audiosample_handle h) {
   return -1;
 }
 
-static int ensure_channel_open(sample_channel_pair_ptr p) {
+static int ensure_channel_open(sample_channel_pair_ptr p, asmp_handle sample) {
 
-  if( p->channel != NULL )
-    return 0;
+  int c = asmp_get_channels		( sample );
+  int r = asmp_get_samplerate	( sample );
+  int s = asmp_get_samplesize	( sample );
 
-  return aout_open( &p->channel, 2, 44100 );
+  if( p->channel )
+	  return aout_reopen( p->channel, c, r, s );
+  else
+	  return aout_open( &p->channel, c, r, s );
 }
 
 static sample_channel_pair_ptr find_sample_from_array( asmp_handle sample, sample_channel_pair_ptr * array, int len ) {
@@ -265,40 +285,39 @@ static int _rh_audiosample_play( rh_audiosample_handle h, int loop ) {
       sample_channel_pair_ptr p = NULL;
 
       while(!p) {
-	if( bucket_lock( channel_bucket,(void***)&array,&len ) == 0) {
+    	  if( bucket_lock( channel_bucket,(void***)&array,&len ) == 0) {
 
-	  if( ( p = find_sample_from_array(h->sample, array, len) ) == NULL )
-	      p = find_free_channel(array, len);
+    		  if( ( p = find_sample_from_array(h->sample, array, len) ) == NULL )
+    			  p = find_free_channel(array, len);
 
-	  bucket_unlock(channel_bucket);
+    		  bucket_unlock(channel_bucket);
 
-	  if(!p && bucket_add(channel_bucket, calloc(1, sizeof(sample_channel_pair_t))) != 0)
-	    break;
-	}
+    		  if(!p && bucket_add(channel_bucket, calloc(1, sizeof(sample_channel_pair_t))) != 0)
+    			  break;
+    	  }
       }
 
-      if(p && (ensure_channel_open(p) == 0)) {
+      if(p && (ensure_channel_open(p, h->sample) == 0)) {
 
-	p->sample = h->sample;
-//	if(asmp_seek(p->sample, 0, SEEK_SET) == 0) {
-	if(asmp_reset(p->sample) == 0) {
-	  if(aout_register_sample_data(p->channel, p->sample) == 0) {
+    	  p->sample = h->sample;
+    	  if(asmp_reset(p->sample) == 0) {
+    		  if(aout_register_sample_data(p->channel, p->sample) == 0) {
 
-	    aout_register_cb(p->channel, &_cb, h);
+    			  aout_register_cb(p->channel, &_cb, h);
 
-	    h->priv_flags |= PRIV_FLAG_PLAYING;
-	     if(loop)
-	       h->priv_flags |= PRIV_FLAG_LOOPING;
+    			  h->priv_flags |= PRIV_FLAG_PLAYING;
+    			  if(loop)
+    				  h->priv_flags |= PRIV_FLAG_LOOPING;
 
-	    if(loop)
-	      err = aout_loop(p->channel);
-	    else
-	      err = aout_start(p->channel);
+    			  if(loop)
+    				  err = aout_loop(p->channel);
+    			  else
+    				  err = aout_start(p->channel);
 
-	    if( err )
-	      h->priv_flags = 0;
-	  }
-	}
+    			  if( err )
+    				  h->priv_flags = 0;
+    		  }
+    	  }
       }
     }
     pthread_mutex_unlock(&h->monitor);
@@ -330,6 +349,7 @@ int rh_audiosample_stop( rh_audiosample_handle h ) {
 
       err = aout_stop( p->channel );
       aout_register_sample_data( p->channel, NULL );
+
       p->sample = NULL;
     }
 

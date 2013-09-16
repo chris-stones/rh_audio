@@ -11,9 +11,6 @@ static int _OpenSLES_one_time_setup() {
 			SL_BOOLEAN_TRUE },
 			{ SL_ENGINEOPTION_LOSSOFCONTROL, SL_BOOLEAN_FALSE }, };
 
-	if(openSLES.is_setup)
-		return 0;
-
 	if( aout_OpenSLES_io_setup() != 0 )
 		goto err0;
 
@@ -48,12 +45,26 @@ static int _OpenSLES_one_time_setup() {
 					SL_BOOLEAN_FALSE ))
 		goto err5;
 
-
-	openSLES.is_setup = 1;
-
 	return 0;
 
 	err5: err4: err3: err2: err1: err0: return -1;
+}
+
+static int _OpenSLES_one_time_shutdown() {
+
+	aout_OpenSLES_io_teardown();
+
+	if( openSLES.outputMix )
+		(*openSLES.outputMix)->Destroy(openSLES.outputMix);
+
+	if( openSLES.engineObject )
+		(*openSLES.engineObject)->Destroy(openSLES.engineObject);
+
+	openSLES.engineObject = NULL;
+	openSLES.engineItf = NULL;
+	openSLES.outputMix = NULL;
+
+	return 0;
 }
 
 static void _buffer_queue_cb(SLAndroidSimpleBufferQueueItf bq, void *context)
@@ -78,6 +89,21 @@ static int destroy_channel(aout_handle h) {
 	return 0;
 }
 
+
+
+static SLuint32 _sles_get_channelmask(int channels) {
+
+	switch(channels) {
+	default:
+	case 0:
+		return 0;
+	case 1:
+		return SL_SPEAKER_FRONT_CENTER;
+	case 2:
+		return SL_SPEAKER_FRONT_LEFT | SL_SPEAKER_FRONT_RIGHT;
+	}
+}
+
 static int create_channel(aout_handle h) {
 
 	off_t start;
@@ -91,14 +117,23 @@ static int create_channel(aout_handle h) {
 	{
 		int e = 0;
 
+		SLuint32 channelMask = _sles_get_channelmask(p->channels);
+
 		const SLInterfaceID ids[] = { SL_IID_SEEK, SL_IID_BUFFERQUEUE };
 		const SLboolean req[] = { SL_BOOLEAN_FALSE, SL_BOOLEAN_TRUE };
 
 		// configure audio source
 		SLDataLocator_AndroidSimpleBufferQueue loc_bufq = {SL_DATALOCATOR_ANDROIDSIMPLEBUFFERQUEUE, p->bq.nb_buffers};
-		SLDataFormat_PCM format_pcm = {SL_DATAFORMAT_PCM, 1, SL_SAMPLINGRATE_8,
-			SL_PCMSAMPLEFORMAT_FIXED_16, SL_PCMSAMPLEFORMAT_FIXED_16,
-			SL_SPEAKER_FRONT_CENTER, SL_BYTEORDER_LITTLEENDIAN};
+		SLDataFormat_PCM format_pcm =
+		{
+			SL_DATAFORMAT_PCM,
+			p->channels,
+			p->samplerate * 1000,
+			p->samplesize * 8,
+			p->samplesize * 8,
+			channelMask,
+			SL_BYTEORDER_LITTLEENDIAN
+		};
 		SLDataSource audioSrc = {&loc_bufq, &format_pcm};
 
 		// configure audio sink
@@ -149,23 +184,40 @@ static int create_channel(aout_handle h) {
 	return 0;
 }
 
-int aout_OpenSLES_open(aout_handle h, unsigned int channels, unsigned int rate) {
+int aout_OpenSLES_open(aout_handle h, unsigned int channels, unsigned int rate, unsigned int samplesize) {
 
-	struct priv_internal * p = calloc(1, sizeof(struct priv_internal) );
+	if( h->priv != NULL ) {
 
-	if( p ) {
+		struct priv_internal * p = get_priv(h);
 
-		h->priv = p;
+		if(p->channels == channels && p->samplerate == rate && p->samplesize != samplesize)
+			return 0; // channel is already open, and the correct format.
 
-		// FIXME: more assuming formats!!!
-		buffer_queue_alloc( &p->bq, 2, 2 * channels * rate ); // 2 one second buffers ( assumeing 16bit )
-		buffer_queue_alloc_buffers(&p->bq);
-
-		create_channel(h);
-
-		return 0;
+		// channel is open, but the wrong format, close it.
+		aout_OpenSLES_close(h);
 	}
-	return -1;
+
+	// open new channel.
+	{
+		struct priv_internal * p = calloc(1, sizeof(struct priv_internal) );
+
+		if( p ) {
+
+			p->channels = channels;
+			p->samplerate = rate;
+			p->samplesize = samplesize;
+			h->priv = p;
+
+			buffer_queue_alloc( &p->bq, 3, p->samplesize * p->channels * p->samplerate ); // 3 one second buffers ( assuming 16bit )
+
+			buffer_queue_alloc_buffers(&p->bq);
+
+			create_channel(h);
+
+			return 0;
+		}
+		return -1;
+	}
 }
 
 int aout_OpenSLES_close(aout_handle h) {
@@ -203,10 +255,6 @@ int aout_OpenSLES_stop( aout_handle h) {
 
   if( h->status & AOUT_STATUS_PLAYING ) {
 
-	struct priv_internal * p = get_priv(h);
-
-	(*p->playItf)->SetPlayState( p->playItf, SL_PLAYSTATE_STOPPED );
-
     aout_OpenSLES_io_rem(h);
 
     aout_stopped( h );
@@ -224,6 +272,17 @@ int aout_init_interface_OpenSLES(aout_handle p) {
     p->channel_open 	= &aout_OpenSLES_open;
     p->channel_close 	= &aout_OpenSLES_close;
 
-    return _OpenSLES_one_time_setup(); // TODO: use pthread_once();
+    return 0;
 }
+
+int aout_create_OpenSLES() {
+
+	return _OpenSLES_one_time_setup();
+}
+
+int aout_destroy_OpenSLES() {
+
+	return _OpenSLES_one_time_shutdown();
+}
+
 

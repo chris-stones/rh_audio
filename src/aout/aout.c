@@ -161,7 +161,7 @@ static int mutex_init(pthread_mutex_t *mutex, int recursize, int errorcheck, int
   return ret;
 }
 
-static int _aout_open(aout_handle * h, unsigned int chanels, unsigned int rate, int recursive) {
+static int _aout_open(aout_handle * h, unsigned int chanels, unsigned int rate, unsigned int samplesize, int recursive) {
 
   aout_handle p = calloc(1, sizeof( struct aout_type ) );
 
@@ -183,7 +183,7 @@ static int _aout_open(aout_handle * h, unsigned int chanels, unsigned int rate, 
   if( mutex_init( &p->monitor, recursive, 0, 0 ) != 0)
     goto err1;
 
-  if( p->channel_open( p, chanels, rate ) != 0)
+  if( p->channel_open( p, chanels, rate, samplesize ) != 0)
     goto err2;
 
   p->ref = 1;
@@ -200,9 +200,19 @@ err0:
   return -1;
 }
 
-int aout_open(aout_handle * h, unsigned int chanels, unsigned int rate) {
+static int _aout_reopen(aout_handle h, unsigned int chanels, unsigned int rate, unsigned int samplesize) {
 
-  return _aout_open(h,chanels,rate, 1);
+	return h->channel_open(h, chanels, rate, samplesize );
+}
+
+int aout_open(aout_handle * h, unsigned int chanels, unsigned int rate, unsigned int samplesize) {
+
+  return _aout_open(h,chanels,rate, samplesize, 1);
+}
+
+int aout_reopen(aout_handle h, unsigned int chanels, unsigned int rate, unsigned int samplesize) {
+
+ return _aout_reopen(h,chanels,rate, samplesize, 1);
 }
 
 aout_handle aout_addref(aout_handle p) {

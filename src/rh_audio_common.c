@@ -14,16 +14,19 @@ extern "C" {
 
 static bucket_handle sample_bucket = 0;
 
+int rh_audiosample_create_internal_bucket() {
+
+	return bucket_create( &sample_bucket );
+}
+
+int rh_audiosample_destroy_internal_bucket() {
+
+	int e = bucket_free( sample_bucket );
+	sample_bucket = NULL;
+	return e;
+}
+
 int rh_audiosample_add_to_internal_bucket( rh_audiosample_handle sample ) {
-
-	// TODO - fix race here
-	if(!sample_bucket) {
-
-		int e;
-
-		if((e = bucket_create( &sample_bucket ) ) != 0)
-			return e;
-	}
 
 	return bucket_add( sample_bucket, sample );
 }

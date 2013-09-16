@@ -119,6 +119,11 @@ int asmp_read(aud_sample_handle p, int frames, void * dst, size_t dst_size) {
   return -1;
 }
 
+int asmp_get_samplesize(aud_sample_handle p) {
+
+	return p->samplesize;
+}
+
 int asmp_get_channels(aud_sample_handle p) {
 
   return p->channels;

@@ -29,6 +29,7 @@ struct aud_sample_type {
 //  size_t frames;
   int	 channels;
   int	 samplerate;
+  int	 samplesize;
   int 	 flags;
 
   aud_sample_opener opener;
