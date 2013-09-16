@@ -22,6 +22,12 @@ int main(int argc, char ** argv ) {
 	if(err) printf("err == %d ( line %d )\n", err, __LINE__);
 	err = rh_audiosample_open_rawpak(&sample, rawpak_ctx, 0);
 	if(err) printf("err == %d ( line %d )\n", err, __LINE__);
+
+	{
+		int isplaying = rh_audiosample_isplaying(sample);
+		printf("IS PLAYING == %d\n", isplaying);
+	}
+
 	err = rh_audiosample_play(sample);
 	if(err) printf("err == %d ( line %d )\n", err, __LINE__);
 	getchar();

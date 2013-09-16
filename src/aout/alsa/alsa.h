@@ -10,6 +10,10 @@ struct priv_internal {
   // handle
   snd_pcm_t *handle;
 
+  int samplerate;
+  int samplesize;
+  int channels;
+
   // hardware setings
   snd_pcm_hw_params_t *hwparams;
   unsigned int buffertime;
@@ -36,7 +40,7 @@ static inline struct priv_internal * get_priv(aout_handle p) {
   return (struct priv_internal *)p->priv;
 }
 
-int aout_alsa_open(aout_handle h, unsigned int channels, unsigned int rate);
+int aout_alsa_open(aout_handle h, unsigned int channels, unsigned int samplerate, unsigned int samplesize);
 int aout_alsa_close(aout_handle h);
 int aout_alsa_update(aout_handle h);
 int aout_alsa_start( aout_handle h);
