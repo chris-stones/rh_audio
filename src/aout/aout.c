@@ -212,7 +212,7 @@ int aout_open(aout_handle * h, unsigned int chanels, unsigned int rate, unsigned
 
 int aout_reopen(aout_handle h, unsigned int chanels, unsigned int rate, unsigned int samplesize) {
 
- return _aout_reopen(h,chanels,rate, samplesize, 1);
+ return _aout_reopen(h,chanels,rate, samplesize);
 }
 
 aout_handle aout_addref(aout_handle p) {

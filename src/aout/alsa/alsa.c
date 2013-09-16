@@ -9,8 +9,17 @@ int aout_init_interface_ALSA(aout_handle p) {
     p->channel_open = &aout_alsa_open;
     p->channel_close = &aout_alsa_close;
 
-    return aout_alsa_io_setup();
+    return 0;
 }
 
+int aout_create_ALSA() {
+
+	return aout_alsa_io_setup();
+}
+
+int aout_destroy_ALSA() {
+
+	return aout_alsa_io_teardown();
+}
 
 
