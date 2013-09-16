@@ -169,16 +169,14 @@ static int ensure_sample_open(rh_audiosample_handle h) {
 
 static int ensure_channel_open(sample_channel_pair_ptr p, asmp_handle sample) {
 
-  if( p->channel != NULL )
-    return 0;
-  else {
+  int c = asmp_get_channels		( sample );
+  int r = asmp_get_samplerate	( sample );
+  int s = asmp_get_samplesize	( sample );
 
-	  int c = asmp_get_channels		( sample );
-	  int r = asmp_get_samplerate	( sample );
-	  int s = asmp_get_samplesize	( sample );
-
+  if( p->channel )
+	  return aout_reopen( p->channel, c, r, s );
+  else
 	  return aout_open( &p->channel, c, r, s );
-  }
 }
 
 static sample_channel_pair_ptr find_sample_from_array( asmp_handle sample, sample_channel_pair_ptr * array, int len ) {

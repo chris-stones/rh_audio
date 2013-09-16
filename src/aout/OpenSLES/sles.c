@@ -186,24 +186,38 @@ static int create_channel(aout_handle h) {
 
 int aout_OpenSLES_open(aout_handle h, unsigned int channels, unsigned int rate, unsigned int samplesize) {
 
-	struct priv_internal * p = calloc(1, sizeof(struct priv_internal) );
+	if( h->priv != NULL ) {
 
-	if( p ) {
+		struct priv_internal * p = get_priv(h);
 
-		p->channels = channels;
-		p->samplerate = rate;
-		p->samplesize = samplesize;
-		h->priv = p;
+		if(p->channels == channels && p->samplerate == rate && p->samplesize != samplesize)
+			return 0; // channel is already open, and the correct format.
 
-		buffer_queue_alloc( &p->bq, 3, p->samplesize * p->channels * p->samplerate ); // 3 one second buffers ( assuming 16bit )
-
-		buffer_queue_alloc_buffers(&p->bq);
-
-		create_channel(h);
-
-		return 0;
+		// channel is open, but the wrong format, close it.
+		aout_OpenSLES_close(h);
 	}
-	return -1;
+
+	// open new channel.
+	{
+		struct priv_internal * p = calloc(1, sizeof(struct priv_internal) );
+
+		if( p ) {
+
+			p->channels = channels;
+			p->samplerate = rate;
+			p->samplesize = samplesize;
+			h->priv = p;
+
+			buffer_queue_alloc( &p->bq, 3, p->samplesize * p->channels * p->samplerate ); // 3 one second buffers ( assuming 16bit )
+
+			buffer_queue_alloc_buffers(&p->bq);
+
+			create_channel(h);
+
+			return 0;
+		}
+		return -1;
+	}
 }
 
 int aout_OpenSLES_close(aout_handle h) {

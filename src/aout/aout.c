@@ -200,9 +200,19 @@ err0:
   return -1;
 }
 
+static int _aout_reopen(aout_handle h, unsigned int chanels, unsigned int rate, unsigned int samplesize) {
+
+	return h->channel_open(h, chanels, rate, samplesize );
+}
+
 int aout_open(aout_handle * h, unsigned int chanels, unsigned int rate, unsigned int samplesize) {
 
   return _aout_open(h,chanels,rate, samplesize, 1);
+}
+
+int aout_reopen(aout_handle h, unsigned int chanels, unsigned int rate, unsigned int samplesize) {
+
+ return _aout_reopen(h,chanels,rate, samplesize, 1);
 }
 
 aout_handle aout_addref(aout_handle p) {
