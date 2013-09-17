@@ -28,6 +28,20 @@ static inline SNDFILE * get_ctx(aud_sample_handle p) {
   return get_priv(p)->context;
 }
 
+static int _samplesize(int format) {
+
+	switch( SF_FORMAT_SUBMASK & format ) {
+		case SF_FORMAT_PCM_S8:	return 1;	/* Signed 8 bit data */
+		case SF_FORMAT_PCM_16:	return 2;	/* Signed 16 bit data */
+		case SF_FORMAT_PCM_24:	return 3;	/* Signed 24 bit data */
+		case SF_FORMAT_PCM_32:	return 4;	/* Signed 32 bit data */
+		case SF_FORMAT_PCM_U8:	return 1;	/* Unsigned 8 bit data (WAV and RAW only) */
+		case SF_FORMAT_FLOAT: 	return 4;	/* 32 bit float data */
+		case SF_FORMAT_DOUBLE: 	return 8;	/* 64 bit float data */
+	  }
+	 return 0;
+}
+
 static int _aud_sample_opener(aud_sample_handle p, const char * const fn) {
 
   struct priv_internal *priv = calloc(1, sizeof(struct priv_internal));
@@ -43,11 +57,11 @@ static int _aud_sample_opener(aud_sample_handle p, const char * const fn) {
       p->priv = (void*)priv;
 
       if(priv->sfinfo.seekable)
-	p->flags |= AUD_SAMPLE_SEEKABLE;
+		p->flags |= AUD_SAMPLE_SEEKABLE;
 
-      p->channels 	= priv->sfinfo.channels;
-//      p->frames	  	= priv->sfinfo.frames;
-      p->samplerate 	= priv->sfinfo.samplerate;
+	  p->channels 	= priv->sfinfo.channels;
+	  p->samplesize = _samplesize(priv->sfinfo.format);
+      p->samplerate = priv->sfinfo.samplerate;
 
       return 0;
     }
@@ -68,11 +82,6 @@ static int _aud_sample_reader(aud_sample_handle p, int frames, void * dst, size_
   return e;
 }
 
-//static int _aud_sample_seeker(aud_sample_handle p, int frames, int whence) {
-//
-//  return sf_seek(get_ctx(p), frames, whence);
-//}
-
 static int _aud_sample_resetter(aud_sample_handle p) {
 
   int e = sf_seek(get_ctx(p), 0, SEEK_SET);
@@ -81,11 +90,6 @@ static int _aud_sample_resetter(aud_sample_handle p) {
 
   return e;
 }
-
-//static int _aud_sample_teller(aud_sample_handle p) {
-//
-//  return sf_seek(get_ctx(p), 0, SEEK_CUR);
-//}
 
 static int _aud_sample_stater(aud_sample_handle p) {
 
