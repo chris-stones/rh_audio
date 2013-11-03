@@ -1,5 +1,6 @@
 
 #include "aout_internal.h"
+#include <stdio.h>
 
 int aout_call_callback(aout_handle h, aout_cb_event_enum_t ev) {
 
@@ -28,6 +29,8 @@ int aout_handle_events(aout_handle h) {
 
 int aout_stopped(aout_handle h) {
 
+  printf("aout_stopped %p\n", h);
+
   h->status &= ~AOUT_STATUS_PLAYING;
   h->events |= AOUT_STOPPED;
 
@@ -35,6 +38,8 @@ int aout_stopped(aout_handle h) {
 }
 
 int aout_started(aout_handle h) {
+
+	printf("aout_started %p\n", h);
 
     h->status |= AOUT_STATUS_PLAYING;
     h->events |= AOUT_STARTED;

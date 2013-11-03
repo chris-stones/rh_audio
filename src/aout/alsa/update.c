@@ -152,6 +152,7 @@ static int transfer(aout_handle h) {
 
             if( avail >= priv->buffer_size) {
 
+				h->samp_resetter( h->samp_data );
                 aout_alsa_io_rem( h );
                 return aout_stopped( h );
             }

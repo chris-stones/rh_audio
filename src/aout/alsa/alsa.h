@@ -33,6 +33,7 @@ struct priv_internal {
   int 	 imp_flags;
   void * imp_buffer;
 
+  int in_update_list;
 };
 
 static inline struct priv_internal * get_priv(aout_handle p) {

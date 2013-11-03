@@ -112,16 +112,28 @@ static int pipe_recv( struct io_command_struct *cmd ) {
 
 int aout_alsa_io_add(aout_handle h) {
 
-  struct io_command_struct cmd = { ADD_COMMAND, h };
+  if( get_priv(h)->in_update_list == 0 ) {
 
-  return pipe_send( &cmd );
+	  get_priv(h)->in_update_list++;
+
+	  struct io_command_struct cmd = { ADD_COMMAND, h };
+
+	  return pipe_send( &cmd );
+  }
+  return 0;
 }
 
 int aout_alsa_io_rem(aout_handle h) {
 
-  struct io_command_struct cmd = { REMOVE_COMMAND, h };
+  if( get_priv(h)->in_update_list > 0 ) {
 
-  return pipe_send( &cmd );
+	get_priv(h)->in_update_list--;
+
+	struct io_command_struct cmd = { REMOVE_COMMAND, h };
+
+	return pipe_send( &cmd );
+  }
+  return 0;
 }
 
 int aout_alsa_io_reset(aout_handle h) {
@@ -147,12 +159,15 @@ static int process_cmd_pipe() {
 
     switch(cmd.command) {
 		case REMOVE_COMMAND:
+			printf("REMOVING %p\n", cmd.h);
 			e = bucket_remove(io.aout_handle_bucket, cmd.h);
 			break;
 		case ADD_COMMAND:
+			printf("ADDING %p\n", cmd.h);
 			e = bucket_add(io.aout_handle_bucket, cmd.h);
 			break;
 		case RESET_COMMAND:
+			printf("RESETTING %p\n", cmd.h);
 			e = cmd.h->samp_resetter( cmd.h->samp_data );
 			break;
 		default:
@@ -185,16 +200,17 @@ static int aout_alsa_io_poll() {
     for(i=0; i<len; i++) {
 
       struct priv_internal * priv = get_priv( array[i] );
+	  int dc;
 
       if( priv->sleep )
-	continue; // sample is draining, we are not interested in its writability.
+		continue; // sample is draining, we are not interested in its writability.
 
-      int dc = snd_pcm_poll_descriptors_count( priv->handle );
+	dc = snd_pcm_poll_descriptors_count( priv->handle );
 
-      if(dc >= 0)
-	fd_count += dc;
-      else
-	++err;
+	if(dc >= 0)
+		fd_count += dc;
+	else
+		++err;
     }
 
     // second pass - collect file descriptors.

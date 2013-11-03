@@ -41,7 +41,7 @@ int main(int argc, char ** argv ) {
 
 	err = rh_audiosample_play(sample);
 
-	usleep(20000);
+	usleep(2000000);
 
 	err = rh_audiosample_play(sample);
 
