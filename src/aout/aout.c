@@ -4,6 +4,7 @@
 #include<stdlib.h>
 #include<pthread.h>
 #include<assert.h>
+#include<stdio.h>
 
 static int _dummy_sample_reader_imp		(void *samp_data, int frames, void * p, size_t size) 	{assert(!__FUNCTION__); return -1;}
 static int _dummy_sample_resetter_imp	(void *samp_data) 										{assert(!__FUNCTION__); return -1;}
@@ -250,19 +251,18 @@ int aout_close(aout_handle p) {
   return e;
 }
 
-int aout_rewind(aout_handle p) {
-
-  if( pthread_mutex_lock( &p->monitor ) == 0)  {
-
-	int e = p->samp_resetter(p->samp_data);
-
-    pthread_mutex_unlock(&p->monitor);
-
-    return e;
-  }
-
-  return -1;
-}
+//int aout_rewind(aout_handle p) {
+//
+//  if( pthread_mutex_lock( &p->monitor ) == 0)  {
+//
+//	int e = p->samp_resetter(p->samp_data);
+//
+//    pthread_mutex_unlock(&p->monitor);
+//
+//    return e;
+//  }
+//  return -1;
+//}
 
 int aout_loop(aout_handle p) {
 

@@ -31,6 +31,7 @@ int rh_audiosample_setup();
 int rh_audiosample_shutdown();
 
 int rh_audiosample_open			( rh_audiosample_handle * h, const char * source, int flags );
+int rh_audiosample_open_s5prom	( rh_audiosample_handle * h, FILE * promfile, int sound, int flags);
 int rh_audiosample_open_rawpak	( rh_audiosample_handle * h, void * ctx, int flags);
 int rh_audiosample_close		( rh_audiosample_handle h );
 int rh_audiosample_play 		( rh_audiosample_handle h );

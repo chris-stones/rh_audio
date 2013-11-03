@@ -12,10 +12,17 @@
 
 #include"../../bucket.h"
 
+typedef enum {
+
+	ADD_COMMAND,
+	REMOVE_COMMAND,
+	RESET_COMMAND,
+
+} command_enum_t;
 
 struct io_command_struct {
 
-  int rem;
+  int command;
   aout_handle h;
 };
 
@@ -105,14 +112,21 @@ static int pipe_recv( struct io_command_struct *cmd ) {
 
 int aout_alsa_io_add(aout_handle h) {
 
-  struct io_command_struct cmd = { 0, h };
+  struct io_command_struct cmd = { ADD_COMMAND, h };
 
   return pipe_send( &cmd );
 }
 
 int aout_alsa_io_rem(aout_handle h) {
 
-  struct io_command_struct cmd = { 1, h };
+  struct io_command_struct cmd = { REMOVE_COMMAND, h };
+
+  return pipe_send( &cmd );
+}
+
+int aout_alsa_io_reset(aout_handle h) {
+
+  struct io_command_struct cmd = { RESET_COMMAND, h };
 
   return pipe_send( &cmd );
 }
@@ -131,10 +145,19 @@ static int process_cmd_pipe() {
     if(e == 0)
       return 0;
 
-    if(cmd.rem)
-      e = bucket_remove(io.aout_handle_bucket, cmd.h);
-    else
-      e = bucket_add(io.aout_handle_bucket, cmd.h);
+    switch(cmd.command) {
+		case REMOVE_COMMAND:
+			e = bucket_remove(io.aout_handle_bucket, cmd.h);
+			break;
+		case ADD_COMMAND:
+			e = bucket_add(io.aout_handle_bucket, cmd.h);
+			break;
+		case RESET_COMMAND:
+			e = cmd.h->samp_resetter( cmd.h->samp_data );
+			break;
+		default:
+			break;
+	}
 
     if(e != 0)
       return -1;

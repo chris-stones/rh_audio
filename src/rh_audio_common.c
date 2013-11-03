@@ -7,6 +7,7 @@
 #include "bucket.h"
 
 #include "rh_audio_internal.h"
+//////////#include "../../rh_texture_packer.git/rh_texture_loader/rh_texture_loader.hpp"
 
 #ifdef __cplusplus
 extern "C" {
@@ -95,6 +96,13 @@ int rh_audiosample_open_rawpak( rh_audiosample_handle * h, void * ctx, int flags
 
 	char * resname = (char*)alloca(64);
 	sprintf(resname,"rh_rawpak_ctx://%p", ctx);
+	return rh_audiosample_open(h, resname, flags & ~RH_AUDIOSAMPLE_DONTCOPYSRC);
+}
+
+int rh_audiosample_open_s5prom(rh_audiosample_handle * h, FILE * promfile, int sound, int flags) {
+
+	char * resname = (char*)alloca(64);
+	sprintf(resname,"PROM://%p/%d", promfile, sound);
 	return rh_audiosample_open(h, resname, flags & ~RH_AUDIOSAMPLE_DONTCOPYSRC);
 }
 

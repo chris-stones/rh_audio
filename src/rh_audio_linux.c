@@ -98,7 +98,8 @@ int rh_audiosample_open	( rh_audiosample_handle * out, const char * source, int 
 
   rh_audiosample_handle h = (rh_audiosample_handle)calloc(1,sizeof(struct rh_audiosample_type) );
 
-  if(!h) return -1;
+  if(!h)
+	return -1;
 
   h->flags = flags;
 
@@ -120,15 +121,23 @@ int rh_audiosample_open	( rh_audiosample_handle * out, const char * source, int 
     if((_s = (char*)calloc(1, strlen(source)+1 ))) {
       strcpy(_s, source);
       h->src = _s;
-      *out = h;
+
       rh_audiosample_add_to_internal_bucket( h );
-      return 0;
+
+	  if( asmp_open( &h->sample, h->src ) == 0 ) {
+		*out = h;
+		return 0;
+	  }
+	  free(_s);
     }
   } else {
     h->src = source;
-    *out = h;
     rh_audiosample_add_to_internal_bucket( h );
-    return 0;
+
+	if( asmp_open( &h->sample, h->src ) == 0 ) {
+		*out = h;
+		return 0;
+	}
   }
 
   pthread_mutex_destroy(&h->monitor);
@@ -223,32 +232,29 @@ static int _cb(aout_handle p, void * samp_data, void * cb_data, aout_cb_event_en
 
   int e = -1;
 
-  if(h->cb) {
     switch(ev) {
       case AOUT_STARTED:
-
-	e = (*(h->cb))(h, h->cb_data, RH_AUDIOSAMPLE_STARTED);
+		if(h->cb)
+			e = (*(h->cb))(h, h->cb_data, RH_AUDIOSAMPLE_STARTED);
 	break;
 
-      case AOUT_STOPPED:
-
-	// wake any threads waiting for this sample to finish
-	h->priv_flags = 0;
-	pthread_cond_broadcast( &h->cond );
-
-	e = (*(h->cb))(h, h->cb_data, RH_AUDIOSAMPLE_STOPPED);
+    case AOUT_STOPPED:
+		// wake any threads waiting for this sample to finish
+		h->priv_flags = 0;
+		pthread_cond_broadcast( &h->cond );
+		if(h->cb)
+			e = (*(h->cb))(h, h->cb_data, RH_AUDIOSAMPLE_STOPPED);
 	break;
 
-      case AOUT_ERROR:
-
-	// wake any threads waiting for this sample to finish
-	h->priv_flags = 0;
-	pthread_cond_broadcast( &h->cond );
-
-	e = (*(h->cb))(h, h->cb_data, RH_AUDIOSAMPLE_ERROR);
+	case AOUT_ERROR:
+		// wake any threads waiting for this sample to finish
+		h->priv_flags = 0;
+		pthread_cond_broadcast( &h->cond );
+		if(h->cb)
+			e = (*(h->cb))(h, h->cb_data, RH_AUDIOSAMPLE_ERROR);
 	break;
     }
-  }
+
   return e;
 }
 
@@ -258,8 +264,9 @@ int rh_audiosample_wait( rh_audiosample_handle h ) {
 
   if( pthread_mutex_lock(&h->monitor) == 0 ) {
 
-    while( h->priv_flags & ( PRIV_FLAG_LOOPING | PRIV_FLAG_PLAYING ) )
+    while( h->priv_flags & ( PRIV_FLAG_LOOPING | PRIV_FLAG_PLAYING ) ) {
       cond_wait_and_unlock_if_cancelled( &h->cond, &h->monitor );
+	}
 
     err = 0;
 

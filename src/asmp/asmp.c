@@ -3,7 +3,8 @@
 
 #include<stdlib.h>
 #include<pthread.h>
-
+#include<string.h>
+#include<stdio.h>
 
 int asmp_open(aud_sample_handle * h, const char * const fn) {
 
@@ -12,10 +13,12 @@ int asmp_open(aud_sample_handle * h, const char * const fn) {
   if(!p)
    goto err0;
 
-//  if( aud_init_interface_libsndfile( p ) != 0 )
-//     goto err1;
+  if(strncmp("PROM://",fn,7)==0) {
 
-  if( aud_init_interface_ffmpeg( p ) != 0 )
+	  if( aud_init_interface_s5prom( p ) != 0 )
+		goto err1;
+  }
+  else if( aud_init_interface_ffmpeg( p ) != 0 )
      goto err1;
 
   if( pthread_mutex_init( &p->monitor, NULL ) != 0)

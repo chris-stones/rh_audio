@@ -49,5 +49,6 @@ int aout_alsa_stop( aout_handle h);
 int aout_alsa_io_setup();
 int aout_alsa_io_add(aout_handle h);
 int aout_alsa_io_rem(aout_handle h);
+int aout_alsa_io_reset(aout_handle h);
 int aout_alsa_io_teardown();
 

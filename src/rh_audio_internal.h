@@ -2,15 +2,16 @@
 #pragma once
 
 #include <pthread.h>
+#include <stdio.h>
 
 #include "rh_audio.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-  
+
 static inline int cond_wait_and_unlock_if_cancelled(pthread_cond_t * cond, pthread_mutex_t * mutex) {
- 
+
   int err;
   typedef void (*routine)(void *);
   routine r = (routine)pthread_mutex_unlock;
@@ -21,7 +22,7 @@ static inline int cond_wait_and_unlock_if_cancelled(pthread_cond_t * cond, pthre
 }
 
 static inline int cond_timedwait_and_unlock_if_cancelled(pthread_cond_t * cond, pthread_mutex_t * mutex, struct timespec * abstime) {
-  
+
   typedef void (*routine)(void *);
   routine r = (routine)pthread_mutex_unlock;
   int err;

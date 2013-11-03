@@ -6,8 +6,9 @@
 #include <pthread.h>
 
 int aud_init_interface_libsndfile(aud_sample_handle p); // dieing... libsndfile SEEMED better (simpler) than ffmpeg... but it isnt.
-int aud_init_interface_ffmpeg(aud_sample_handle p);
+int aud_init_interface_ffmpeg(aud_sample_handle p); // use this!
 int aud_init_interface_raw(aud_sample_handle p);
+int aud_init_interface_s5prom(aud_sample_handle p);
 
 typedef int(*aud_sample_opener)(aud_sample_handle p, const char * const fn);
 typedef int(*aud_sample_reader)(aud_sample_handle p, int frames, void * dst, size_t dst_size);

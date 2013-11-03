@@ -145,7 +145,7 @@ static inline int _seek(aud_sample_handle p, long offset, int whence) {
 	struct priv_internal * priv = get_priv(p);
 
 	if(priv->rawpak_ctx)
-		return rh_rawpak_seek(priv->rawpak_ctx);
+		return rh_rawpak_seek(priv->rawpak_ctx, offset, whence);
 	else if(priv->asset)
 		return _SeekAsset(priv->asset, offset, whence);
 	else
