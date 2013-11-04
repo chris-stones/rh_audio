@@ -7,7 +7,6 @@
 #include "bucket.h"
 
 #include "rh_audio_internal.h"
-//////////#include "../../rh_texture_packer.git/rh_texture_loader/rh_texture_loader.hpp"
 
 #ifdef __cplusplus
 extern "C" {

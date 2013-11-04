@@ -10,6 +10,8 @@ int asmp_open(aud_sample_handle * h, const char * const fn) {
 
   aud_sample_handle p = calloc(1, sizeof( struct aud_sample_type ) );
 
+  printf("ALLOCATED aud_sample_handle %p\n",p);
+
   if(!p)
    goto err0;
 
@@ -59,6 +61,8 @@ int asmp_close(aud_sample_handle p) {
 
   int e = -1;
 
+  printf("considering freeing aud_sample_handle %p\n",p);
+
   if( pthread_mutex_lock( &p->monitor ) == 0)  {
 
     p->ref--;
@@ -73,6 +77,7 @@ int asmp_close(aud_sample_handle p) {
     if(p->ref == 0) {
 
       pthread_mutex_destroy(&p->monitor);
+	  printf("FREED aud_sample_handle %p\n",p);
       free(p);
     }
   }

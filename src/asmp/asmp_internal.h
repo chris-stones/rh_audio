@@ -40,8 +40,3 @@ struct aud_sample_type {
   aud_sample_closer closer;
   void * priv;
 };
-
-struct aud_output_type {
-
-  int ref_count;
-};

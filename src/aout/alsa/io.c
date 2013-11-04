@@ -17,6 +17,7 @@ typedef enum {
 	ADD_COMMAND,
 	REMOVE_COMMAND,
 	RESET_COMMAND,
+	EXIT_COMMAND,
 
 } command_enum_t;
 
@@ -28,8 +29,7 @@ struct io_command_struct {
 
 struct io_struct {
 
-  pthread_mutex_t monitor;
-  pthread_t thread;
+  volatile pthread_t thread;
   bucket_handle aout_handle_bucket;
 
   struct {
@@ -42,7 +42,6 @@ struct io_struct {
 
 static struct io_struct io = {
 
-  PTHREAD_MUTEX_INITIALIZER,
   0,
   0,
   {0,0},
@@ -143,6 +142,13 @@ int aout_alsa_io_reset(aout_handle h) {
   return pipe_send( &cmd );
 }
 
+int aout_alsa_io_exit() {
+
+  struct io_command_struct cmd = { EXIT_COMMAND, NULL };
+
+  return pipe_send( &cmd );
+}
+
 static int process_cmd_pipe() {
 
   struct io_command_struct cmd;
@@ -159,16 +165,17 @@ static int process_cmd_pipe() {
 
     switch(cmd.command) {
 		case REMOVE_COMMAND:
-			printf("REMOVING %p\n", cmd.h);
 			e = bucket_remove(io.aout_handle_bucket, cmd.h);
 			break;
 		case ADD_COMMAND:
-			printf("ADDING %p\n", cmd.h);
 			e = bucket_add(io.aout_handle_bucket, cmd.h);
 			break;
 		case RESET_COMMAND:
-			printf("RESETTING %p\n", cmd.h);
 			e = cmd.h->samp_resetter( cmd.h->samp_data );
+			break;
+		case EXIT_COMMAND:
+			io.thread = 0;
+			pthread_exit(NULL);
 			break;
 		default:
 			break;
@@ -282,7 +289,7 @@ static void * io_main(void * p) {
   return NULL;
 }
 
-static int _aout_alsa_io_setup() {
+int aout_alsa_io_setup() {
 
   if( pipe( &io.cmd_pipe.read ) != 0 )
     goto err0;
@@ -293,8 +300,12 @@ static int _aout_alsa_io_setup() {
   if(bucket_create(&io.aout_handle_bucket) != 0)
     goto err2;
 
-  if(pthread_create(&io.thread, NULL, &io_main, NULL) != 0)
-    goto err3;
+  {
+    pthread_t thread;
+	if(pthread_create(&thread, NULL, &io_main, NULL) != 0)
+	  goto err3;
+	io.thread = thread;
+  }
 
   pthread_detach( io.thread );
 
@@ -312,30 +323,23 @@ err0:
   return -1;
 }
 
-int aout_alsa_io_setup() {
-
-  int e = -1;
-
-  if( pthread_mutex_lock( &io.monitor ) == 0 ) {
-
-    e = 0;
-    if(!io.is_initialised)
-      e = _aout_alsa_io_setup();
-
-    pthread_mutex_unlock( &io.monitor );
-  }
-
-  return e;
-}
-
 int aout_alsa_io_teardown() {
 
-  pthread_cancel(io.thread);
-//pthread_cond_signal(&io.cond);
-//pthread_kill(io.thread, SIGIO);
-//pthread_join(io.thread, NULL);
-  io.thread = 0;
+	if(io.thread) {
+		aout_alsa_io_exit();
+		while(io.thread)
+			sched_yield();
+	}
 
-  return 0;
+	bucket_free(io.aout_handle_bucket);
+	io.aout_handle_bucket = NULL;
+
+	close(io.cmd_pipe.write);
+	io.cmd_pipe.write = 0;
+
+	close(io.cmd_pipe.read);
+	io.cmd_pipe.read = 0;
+
+	return 0;
 }
 

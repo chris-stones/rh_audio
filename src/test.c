@@ -55,6 +55,9 @@ int main(int argc, char ** argv ) {
 
 	err = rh_audiosample_stop(sample);
 	if(err) printf("err == %d ( line %d )\n", err, __LINE__);
+
+	rh_audiosample_close(sample);
+
 	err = rh_audiosample_shutdown();
 	if(err) printf("err == %d ( line %d )\n", err, __LINE__);
 

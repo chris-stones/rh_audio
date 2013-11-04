@@ -15,9 +15,6 @@ static int enqueue(aout_handle h) {
 	if( buffer ) {
 		SLresult result;
 
-//		if( buffer->bytes_used < bq->buffersize )
-//			memset( ((char*)buffer->buffer) + buffer->bytes_used , 0, bq->buffersize - buffer->bytes_used );
-
 		result = ( *p->bufferQueueItf )->Enqueue(p->bufferQueueItf, buffer->buffer, buffer->bytes_used);
 
 		if( SL_RESULT_SUCCESS != result) {
@@ -148,9 +145,6 @@ int aout_OpenSLES_update(aout_handle h) {
 		if( SL_RESULT_SUCCESS == (*priv->playItf)->GetPlayState(priv->playItf, &playState) ) {
 
 			if( playState != SL_PLAYSTATE_PLAYING) {
-
-//				(*priv->bufferQueueItf)->Clear(priv->bufferQueueItf);
-//				buffer_queue_reset( &priv->bq );
 
 				if( SL_RESULT_SUCCESS != (*priv->playItf)->SetPlayState(priv->playItf, SL_PLAYSTATE_PLAYING) ) {
 

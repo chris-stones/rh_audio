@@ -19,7 +19,8 @@ int aout_create_ALSA() {
 
 int aout_destroy_ALSA() {
 
+	snd_config_update_free_global();
+
 	return aout_alsa_io_teardown();
 }
-
 

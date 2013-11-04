@@ -74,7 +74,8 @@ int rh_audiosample_shutdown() {
 	 for(i=0;i<len;i++)
 		if(array[i]->channel) {
 			aout_close(array[i]->channel);
-			array[i]->channel = NULL;
+//			asmp_close(array[i]->sample); // TODO: After ref-counting is implemented!
+			free(array[i]);
 		}
 
 	  bucket_unlock( channel_bucket );
@@ -158,8 +159,12 @@ int rh_audiosample_close( rh_audiosample_handle h ) {
     		pthread_mutex_unlock(&h->monitor);
 
     	pthread_mutex_destroy( &h->monitor );
+
     	if((h->flags & RH_AUDIOSAMPLE_DONTCOPYSRC)==0)
     		free((void*)(h->src));
+
+		asmp_close(h->sample);
+
     	free(h);
     }
     return 0;

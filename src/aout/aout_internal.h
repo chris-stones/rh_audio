@@ -45,12 +45,12 @@ struct aout_type {
   aout_sample_reader 	samp_reader;
   aout_sample_resetter 	samp_resetter;
   aout_sample_stater 	samp_stater;
-  aout_cb cb; void * cb_data;
+  aout_cb cb;
+  void * cb_data;
   int cb_depth;
 
   aout_channel_start channel_start;
   aout_channel_stop channel_stop;
-//  aout_channel_update channel_update;
   aout_channel_open channel_open;
   aout_channel_close channel_close;
 
