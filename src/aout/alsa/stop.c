@@ -1,17 +1,23 @@
 
-#include "alsa.h"
+#include "alsa_private.h"
 
-int aout_alsa_stop( aout_handle h) {
+int aout_alsa_stop( rh_aout_itf self ) {
 
-  if( h->status & AOUT_STATUS_PLAYING ) {
+  struct aout_instance * instance = (struct aout_instance *)self;
 
-    snd_pcm_drop( get_priv(h)->handle );
+  if( ( instance->status_flags & RH_AOUT_STATUS_STOPPED ) == 0 ) {
 
-    aout_alsa_io_rem(h);
-    aout_stopped(h);
-	aout_alsa_io_reset(h);
+	rh_asmp_itf audio_sample = instance->audio_sample;
 
-    aout_handle_events( h ); // todo - move this to the alsa-io-thread !
+    snd_pcm_drop( instance->handle );
+
+	instance->status_flags = RH_AOUT_STATUS_STOPPED;
+
+    if( audio_sample ) {
+
+		(*audio_sample)->on_output_event( audio_sample, RH_ASMP_OUTPUT_EVENT_STOPPED );
+		(*audio_sample)->reset(audio_sample);
+	}
   }
 
   return 0;

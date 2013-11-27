@@ -3,11 +3,9 @@
 add_subdirectory(aout)
 add_subdirectory(asmp)
 
-FILE(GLOB linux_c_source_files *linux.c)
+FILE(GLOB c_source_files *.c)
 
-add_library(rh_audio SHARED ${linux_c_source_files} rh_audio_common.c bucket.c)
-#add_library(rh_audio SHARED ${c_source_files} )
-#add_library(rh_audio SHARED "rh_audio_linux.c" )
+add_library(rh_audio SHARED ${c_source_files} )
 
 install (TARGETS rh_audio DESTINATION lib/)
 install (FILES rh_audio.h DESTINATION include/)

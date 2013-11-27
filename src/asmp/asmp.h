@@ -7,22 +7,46 @@
 extern "C" {
 #endif /** __cplusplus **/
 
-struct aud_sample_type;
+typedef enum {
 
-typedef struct aud_sample_type * aud_sample_handle;
+	RH_ASMP_OUTPUT_EVENT_STARTED = (1<<0),
+	RH_ASMP_OUTPUT_EVENT_STOPPED = (1<<1),
+	RH_ASMP_OUTPUT_EVENT_ERROR   = (1<<2),
+	RH_ASMP_OUTPUT_EVENT_SYNC    = (1<<3),
 
-#define asmp_handle aud_sample_handle // TODO
+} rh_output_event_enum_t;
 
-int asmp_open(aud_sample_handle * h, const char * const fn);
-aud_sample_handle asmp_addref(aud_sample_handle p);
-int asmp_close(aud_sample_handle p);
-int asmp_stat(aud_sample_handle p);
-int asmp_reset(aud_sample_handle p);
-int asmp_read(aud_sample_handle p, int frames, void * dst, size_t dst_size);
+typedef int (*asmp_cb_func_t)(void * data, rh_output_event_enum_t ev);
 
-int asmp_get_channels(aud_sample_handle p);
-int asmp_get_samplerate(aud_sample_handle p);
-int asmp_get_samplesize(aud_sample_handle p);
+struct rh_asmp;
+
+typedef const struct rh_asmp * const * rh_asmp_itf; /* RockHopper audiosample interface */
+
+struct rh_asmp {
+
+	int         (*open)            (rh_asmp_itf  self, const char * const fn);
+	int         (*close)           (rh_asmp_itf *self); /* thread safe */
+	rh_asmp_itf (*addref)          (rh_asmp_itf  self); /* thread safe */
+	int         (*atend)           (rh_asmp_itf  self);
+	int         (*reset)           (rh_asmp_itf  self);
+	int         (*read)            (rh_asmp_itf  self, int frames, void * dst);
+	int         (*channels)        (rh_asmp_itf  self);
+	int         (*samplerate)      (rh_asmp_itf  self);
+	int         (*samplesize)      (rh_asmp_itf  self);
+
+	int         (*on_output_event)(rh_asmp_itf  self, rh_output_event_enum_t ev); // CALLED BY THE AUDIO OUTPUT INTERFACE IMPLEMENTATION
+};
+
+typedef enum {
+
+	RH_ASMP_IMP_FFMPEG = (1<<0),
+	RH_ASMP_IMP_S5PROM = (1<<1),
+
+	RH_ASMP_IMP_DEFAULT = RH_ASMP_IMP_FFMPEG,
+
+} rh_asmp_imp_enum_t;
+
+int rh_asmp_create( rh_asmp_itf * itf, rh_asmp_imp_enum_t implementation, asmp_cb_func_t cb, void * cb_data );
 
 #ifdef __cplusplus
 } // extern "C" {

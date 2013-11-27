@@ -1,10 +1,8 @@
 
-#include "alsa.h"
+
 #include <stdio.h>
 
-int aout_alsa_hw_settings(aout_handle h, snd_pcm_format_t format, unsigned int channels, unsigned int rate);
-int aout_alsa_sw_settings(aout_handle h);
-
+#include "alsa_private.h"
 
 static snd_pcm_format_t _determine_format(unsigned int samplesize) {
 
@@ -17,68 +15,71 @@ static snd_pcm_format_t _determine_format(unsigned int samplesize) {
 	}
 }
 
-static int _aout_alsa_open(aout_handle h, unsigned int channels, unsigned int samplerate, unsigned int samplesize) {
+static int _aout_alsa_open(rh_aout_itf self, unsigned int channels, unsigned int samplerate, unsigned int samplesize) {
+
+  struct aout_instance * instance = (struct aout_instance *)self;
 
   snd_pcm_t * snd_handle;
 
   snd_pcm_format_t format = _determine_format(samplesize);
 
-  struct priv_internal *priv = (struct priv_internal *)calloc(1,sizeof(struct aout_type ));
+  printf("_aout_alsa_open %p %d %d %d\n", self, channels, samplerate, samplesize);
 
-  priv->channels = channels;
-  priv->samplerate = samplerate;
-  priv->samplesize = samplesize;
+  instance->channels = channels;
+  instance->samplerate = samplerate;
+  instance->samplesize = samplesize;
 
-  if(!priv)
-    goto err0;
-
-//if( snd_pcm_open(&snd_handle, "plughw:0,0", SND_PCM_STREAM_PLAYBACK, 0) < 0 )
-  if( snd_pcm_open(&snd_handle, "default", SND_PCM_STREAM_PLAYBACK, 0) < 0 )
+  if( snd_pcm_open(&snd_handle, "default", SND_PCM_STREAM_PLAYBACK, 0) < 0 ) {
+	printf("snd_pcm_open error\n");
     goto err1;
+  }
 
-  priv->handle = snd_handle;
+  instance->handle = snd_handle;
 
-  h->priv = priv;
-
-  if( aout_alsa_hw_settings(h, format, channels, samplerate) < 0 )
+  if( aout_alsa_hw_settings(self, format, channels, samplerate) < 0 ) {
+	printf("aout_alsa_hw_settings error\n");
     goto err2;
+  }
 
-  if( aout_alsa_sw_settings(h) < 0 )
+  if( aout_alsa_sw_settings(self) < 0 ) {
+	printf("aout_alsa_sw_settings error\n");
     goto err3;
+  }
 
-  if(priv->imp_flags == IMP_FLAG_RW) {
-    priv->imp_buffer = (void*)malloc( priv->buffer_size * samplesize );
-    if(priv->imp_buffer == NULL)
+  if(instance->imp_flags == IMP_FLAG_RW) {
+    instance->imp_buffer = (void*)malloc( instance->buffer_size * samplesize );
+    if(instance->imp_buffer == NULL) {
+	  printf("instance->imp_buffer = malloc(%d) error\n", (int)instance->buffer_size * samplesize );
       goto err3;
+	}
   }
 
   return 0;
 err3:
-  free(priv->swparams);
+  free(instance->swparams);
 err2:
-  free(priv->hwparams);
-  snd_pcm_close(priv->handle);
+  free(instance->hwparams);
+  snd_pcm_close(instance->handle);
 err1:
-  free(priv);
 err0:
   return -1;
 }
 
-int aout_alsa_open(aout_handle h, unsigned int channels, unsigned int samplerate, unsigned int samplesize) {
+int aout_alsa_open(rh_aout_itf self, uint32_t channels, uint32_t samplerate, uint32_t samplesize) {
 
-	struct priv_internal *priv = get_priv(h);
+	struct aout_instance * instance = (struct aout_instance *)self;
 
-	if( priv && priv->channels == channels && priv->samplerate == samplerate && priv->samplesize == samplesize ) {
+	if( instance && instance->channels == channels && instance->samplerate == samplerate && instance->samplesize == samplesize ) {
 
 		// channel already open, and the correct format
 		return 0;
 	}
-	else if( priv ) {
+	else if( instance ) {
 
 		// channel open, but the wrong format.
-		aout_alsa_close( h );
+		aout_alsa_close_api_nolock(&self);
 	}
 
-	return _aout_alsa_open(h, channels, samplerate, samplesize);
+	return _aout_alsa_open(self, channels, samplerate, samplesize);
 }
 

@@ -2,54 +2,31 @@
 #pragma once
 
 #include<stdlib.h>
+#include<stdint.h>
+
+#include "../asmp/asmp.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif /** __cplusplus **/
 
-struct aout_type;
-typedef struct aout_type * aout_handle;
+/***************************************** API OUTPUT API INTERFACE *********************************/
 
-typedef enum {
+struct rh_aout_api;
 
-  AOUT_STOPPED = (1<<0),
-  AOUT_STARTED = (1<<1),
-  AOUT_ERROR   = (1<<2)
+typedef const struct rh_aout_api * const * rh_aout_api_itf;
 
-} aout_cb_event_enum_t;
+struct rh_aout_api {
 
-typedef int(*aout_sample_reader)	(void * samp_data, int frames, void * p, size_t size);
-typedef int(*aout_sample_stater)	(void * samp_data);
-typedef int(*aout_sample_resetter)	(void * samp_data);
-typedef int(*aout_cb)				(aout_handle p, void * samp_data, void * cb_data, aout_cb_event_enum_t ev);
+	int    (*setup)    (rh_aout_api_itf  self);
+	int    (*shutdown) (rh_aout_api_itf *self);
+	int    (*play)     (rh_aout_api_itf  self, rh_asmp_itf sample);
+	int    (*loop)     (rh_aout_api_itf  self, rh_asmp_itf sample);
+	int    (*stop)     (rh_aout_api_itf  self, rh_asmp_itf sample);
+	int    (*sync)     (rh_aout_api_itf  self, rh_asmp_itf sample);
+};
 
-int aout_open(aout_handle * h, unsigned int chanels, unsigned int rate, unsigned int samplesize);
-int aout_reopen(aout_handle h, unsigned int chanels, unsigned int rate, unsigned int samplesize);
-
-aout_handle aout_addref(aout_handle p);
-int aout_close(aout_handle p);
-int aout_rewind(aout_handle p);
-int aout_update(aout_handle p);
-int aout_start(aout_handle p);
-int aout_loop(aout_handle p);
-int aout_stop(aout_handle p);
-int aout_running(aout_handle p);
-
-int aout_update_all();
-int aout_update_next();
-
-void * aout_get_sample_data(aout_handle h);
-void * aout_get_cb_data(aout_handle h);
-
-int aout_register_sample_data(aout_handle p, void * data);
-int aout_register_cb(aout_handle h, aout_cb c, void * cb_data);
-int aout_register_sample_readfunc(aout_handle p, aout_sample_reader r);
-int aout_register_sample_resetfunc(aout_handle p, aout_sample_resetter s);
-int aout_register_sample_statfunc(aout_handle p, aout_sample_stater t);
-
-int aout_register_default_sample_readfunc(aout_sample_reader r);
-int aout_register_default_sample_resetfunc(aout_sample_resetter s);
-int aout_register_default_sample_statfunc(aout_sample_stater t);
+int rh_aout_create_api( rh_aout_api_itf * itf );
 
 #ifdef __cplusplus
 } /* extern "C" { */

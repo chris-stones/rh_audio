@@ -1,6 +1,31 @@
 
-#include "alsa.h"
+#include "alsa_private.h"
 #include <stdio.h>
+
+/*
+ * Somthing went wrong!
+ * IF the sample was supposed to be playing, send a stopped event. ( prevent locking up a thread waiting for a sample to finish. )
+ * Send an error event, set the channel to free, and stopped.
+ */
+static int error(rh_aout_itf self) {
+
+	struct aout_instance * instance = (struct aout_instance *)self;
+
+	rh_asmp_itf audio_sample = instance->audio_sample;
+
+	if(audio_sample) {
+		if(instance->status_flags & (RH_AOUT_STATUS_PLAYING | RH_AOUT_STATUS_LOOPING) )
+			(*audio_sample)->on_output_event(audio_sample, RH_ASMP_OUTPUT_EVENT_STOPPED);
+
+		(*audio_sample)->on_output_event(audio_sample, RH_ASMP_OUTPUT_EVENT_ERROR);
+	}
+
+	instance->status_flags = RH_AOUT_STATUS_STOPPED;
+
+	aout_alsa_set_sample(self, NULL);
+
+	return -1;
+}
 
 static void * get_buffer_address( const snd_pcm_channel_area_t *areas, snd_pcm_uframes_t offset ) {
 
@@ -69,26 +94,28 @@ static int prepare_for_transfer( snd_pcm_t * handle ) {
     return -1; // never hit
 }
 
-static int indirect_transfer(aout_handle h, int frames) {
+static int indirect_transfer(rh_aout_itf self, int frames) {
 
-    struct priv_internal *priv = get_priv(h);
+    struct aout_instance * instance = (struct aout_instance *)self;
 
-    frames = h->samp_reader( h->samp_data, frames, priv->imp_buffer, 0 );
+    frames = aout_alsa_read_sample(self, frames, instance->imp_buffer);
 
-    int err = snd_pcm_writei( priv->handle, priv->imp_buffer, frames);
+    int err = snd_pcm_writei( instance->handle, instance->imp_buffer, frames);
 
     if(err >= 0)
         frames = err;
     else {
         frames = 0;
-        if( snd_pcm_recover(priv->handle, err, 0) != 0 )
-            return aout_error(h);
+        if( snd_pcm_recover(instance->handle, err, 0) != 0 )
+            return error(self);
     }
 
     return frames;
 }
 
-static int direct_transfer(aout_handle h, snd_pcm_uframes_t frames) {
+static int direct_transfer(rh_aout_itf self, snd_pcm_uframes_t frames) {
+
+	struct aout_instance * instance = (struct aout_instance *)self;
 
     int err;
 
@@ -96,16 +123,16 @@ static int direct_transfer(aout_handle h, snd_pcm_uframes_t frames) {
 
     snd_pcm_uframes_t offset;
 
-    snd_pcm_t *handle = get_priv(h)->handle;
+    snd_pcm_t *handle = instance->handle;
 
     if((err = snd_pcm_mmap_begin(handle,&my_areas, &offset, &frames))<0) {
         if( snd_pcm_recover(handle, err, 1) != 0 )
-            return aout_error(h);
+            return error(self);
 
         return 0;
     }
 
-    frames = h->samp_reader( h->samp_data, frames, get_buffer_address( my_areas, offset ), 0 );
+	frames = aout_alsa_read_sample(self, frames, get_buffer_address( my_areas, offset ) );
 
     snd_pcm_sframes_t commitres =
         snd_pcm_mmap_commit(handle, offset, frames);
@@ -113,27 +140,18 @@ static int direct_transfer(aout_handle h, snd_pcm_uframes_t frames) {
     if( commitres < 0 || commitres != frames ) {
 
         if( snd_pcm_recover( handle, commitres >= 0 ? -EPIPE : commitres, 1 ) != 0 )
-            return aout_error(h);
+            return error(self);
     }
 
     return frames;
 }
+static int transfer(rh_aout_itf self) {
 
-static int is_stream_at_end(aout_handle h) {
+    struct aout_instance * instance = (struct aout_instance *)self;
 
-	if( h->samp_stater( h->samp_data ) & 1 ) // TODO: ENUM STAT MASKS!!! ( 1 == stream at end )
-		return 1;
+    snd_pcm_t * handle = instance->handle;
 
-	return 0;
-}
-
-static int transfer(aout_handle h) {
-
-    struct priv_internal *priv = get_priv(h);
-
-    snd_pcm_t * handle = priv->handle;
-
-    while( h->status & AOUT_STATUS_PLAYING ) {
+    while( instance->status_flags & (RH_AOUT_STATUS_PLAYING | RH_AOUT_STATUS_LOOPING )) {
 
         snd_pcm_sframes_t  avail;
 
@@ -141,40 +159,39 @@ static int transfer(aout_handle h) {
 
         while( ( avail = snd_pcm_avail_update( handle ) ) < 0 )
             if( snd_pcm_recover( handle, avail, 1 ) != 0 )
-                return aout_error( h );
+                return error(self);
 
-        if( is_stream_at_end( h ) ) {
+		if( aout_alsa_atend_sample(self) ) {
 
-            if(h->status & AOUT_STATUS_LOOPING)
-                if( h->samp_resetter( h->samp_data ) == 0 )
+            if(instance->status_flags & RH_AOUT_STATUS_LOOPING)
+                if( aout_alsa_reset_sample(self) == 0 )
                     continue;
 
 
-            if( avail >= priv->buffer_size) {
+            if( avail >= instance->buffer_size) {
 
-				h->samp_resetter( h->samp_data );
-                aout_alsa_io_rem( h );
-                return aout_stopped( h );
+				aout_alsa_reset_sample(self);
+                return aout_alsa_stop( self );
             }
 
-            priv->sleep = priv->period_time;
+            instance->sleep = instance->period_time;
 
             return 0;
         }
 
-        if( avail < priv->period_size )
+        if( avail < instance->period_size )
             return 0;
 
-        snd_pcm_uframes_t size = priv->period_size;
+        snd_pcm_uframes_t size = instance->period_size;
 
         while( size > 0 ) {
 
             snd_pcm_uframes_t frames = size;
 
-            if( priv->imp_flags == IMP_FLAG_MMAP )
-                frames = direct_transfer(h, frames);
-            else if( priv->imp_flags == IMP_FLAG_RW)
-                frames = indirect_transfer(h, frames);
+            if( instance->imp_flags == IMP_FLAG_MMAP )
+                frames = direct_transfer(self, frames);
+            else if( instance->imp_flags == IMP_FLAG_RW)
+                frames = indirect_transfer(self, frames);
 
             size -= frames;
 
@@ -189,22 +206,20 @@ static int transfer(aout_handle h) {
     return 0;
 }
 
-int aout_alsa_update(aout_handle h) {
+int aout_alsa_update(rh_aout_itf self) {
 
-    struct priv_internal *priv = get_priv(h);
+    struct aout_instance * instance = (struct aout_instance *)self;
 
-    snd_pcm_t * handle = priv->handle;
+    snd_pcm_t * handle = instance->handle;
 
-    priv->sleep = 0;
+    instance->sleep = 0;
 
-    int e = transfer( h );
+    int e = transfer( self );
 
-    if( ( e == 0 ) && ( h->status & AOUT_STATUS_PLAYING ) )
+    if( ( e == 0 ) && ( instance->status_flags & (RH_AOUT_STATUS_PLAYING | RH_AOUT_STATUS_LOOPING ) ) )
         if( snd_pcm_state( handle ) == SND_PCM_STATE_PREPARED)
             if( snd_pcm_start( handle ) < 0)
-                e = aout_stopped( h );
-
-    aout_handle_events(h);
+                e = error( self );
 
     return e;
 }

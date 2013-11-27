@@ -1,7 +1,7 @@
 
 #include "sles.h"
 
-struct openSLES openSLES = {0, };
+struct openSLEopenSLES = {0, };
 
 static int _OpenSLES_one_time_setup() {
 

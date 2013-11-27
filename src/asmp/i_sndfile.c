@@ -1,11 +1,12 @@
 
+// OLD DEAD CODE.
+
 /***
  *
- * Using libsndfile as a backend.
+ * Stream audio data from libsndfile.
  *
  */
 
-#include "asmp_internal.h"
 
 #include<sndfile.h>
 #include<stdlib.h>

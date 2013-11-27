@@ -1,49 +1,42 @@
 
 #pragma once
 
-//#include<rh_raw_loader.h>
-
 #ifdef __cplusplus
 extern "C" {
 #endif /** __cplusplus **/
 
-struct rh_audiosample_type;
+struct rh_audio;
 
-typedef struct rh_audiosample_type * rh_audiosample_handle;
-
-typedef enum {
-
-  RH_AUDIOSAMPLE_STOPPED = (1<<0),
-  RH_AUDIOSAMPLE_STARTED = (1<<1),
-  RH_AUDIOSAMPLE_ERROR   = (1<<2)
-
-} rh_audioevent_cb_event_enum_t;
+typedef const struct rh_audio * const * rh_audio_itf; /* RockHopper audio interface */
 
 typedef enum {
 
-  RH_AUDIOSAMPLE_DONTCOPYSRC = (1<<0),
+	RH_AUDIO_OPEN_DONTCOPYSOURCE = ( 1<< 0)
 
-} rh_audiosample_openflags_enum_t;
+} rh_audio_open_flags;
 
-typedef int (*rh_audiosample_cb_type)(rh_audiosample_handle h, void * cb_data, rh_audioevent_cb_event_enum_t ev);
+struct rh_audio {
 
-int rh_audiosample_setup();
-int rh_audiosample_shutdown();
+	int         (*open)        (rh_audio_itf  self, const char * source, int flags);
+	int         (*close)       (rh_audio_itf *self);
+	int         (*play)        (rh_audio_itf  self);
+	int         (*loop)        (rh_audio_itf  self);
+	int         (*stop)        (rh_audio_itf  self);
+	int         (*wait)        (rh_audio_itf  self);
+	int         (*is_playing)  (rh_audio_itf  self);
+};
 
-int rh_audiosample_open			( rh_audiosample_handle * h, const char * source, int flags );
-int rh_audiosample_open_s5prom	( rh_audiosample_handle * h, FILE * promfile, int sound, int flags);
-int rh_audiosample_open_rawpak	( rh_audiosample_handle * h, void * ctx, int flags);
-int rh_audiosample_close		( rh_audiosample_handle h );
-int rh_audiosample_play 		( rh_audiosample_handle h );
-int rh_audiosample_loop 		( rh_audiosample_handle h );
-int rh_audiosample_stop 		( rh_audiosample_handle h );
-int rh_audiosample_wait			( rh_audiosample_handle h );
-int rh_audiosample_isplaying	( rh_audiosample_handle h );
-int rh_audiosample_seek			( rh_audiosample_handle h, int offset, int whence );
-int rh_audiosample_register_cb	( rh_audiosample_handle h, rh_audiosample_cb_type cb, void * cb_data );
+int rh_audio_setup_api();
+int rh_audio_shutdown_api();
+int rh_audio_create( rh_audio_itf * itf );
 
-int rh_audiosample_stopall();
-int rh_audiosample_closeall();
+static inline int rh_audio_open        (rh_audio_itf  self, const char * source, int flags) { return (*self)->open(self, source, flags); }
+static inline int rh_audio_close       (rh_audio_itf *self) { return (**self)->close(self); }
+static inline int rh_audio_play        (rh_audio_itf  self) { return ( *self)->play(self); }
+static inline int rh_audio_loop        (rh_audio_itf  self) { return ( *self)->loop(self); }
+static inline int rh_audio_stop        (rh_audio_itf  self) { return ( *self)->stop(self); }
+static inline int rh_audio_wait        (rh_audio_itf  self) { return ( *self)->wait(self); }
+static inline int rh_audio_is_playing  (rh_audio_itf  self) { return ( *self)->is_playing(self); }
 
 #ifdef __cplusplus
 } /* extern "C" { */

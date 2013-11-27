@@ -1,26 +1,38 @@
 
 
-#include "alsa.h"
+#include "alsa_private.h"
 
-int aout_init_interface_ALSA(aout_handle p) {
+#include<pthread.h>
 
-    p->channel_start = &aout_alsa_start;
-    p->channel_stop = &aout_alsa_stop;
-    p->channel_open = &aout_alsa_open;
-    p->channel_close = &aout_alsa_close;
+int rh_aout_create_alsa( rh_aout_itf * itf ) {
 
-    return 0;
-}
+	{
+		struct aout_instance * instance  = calloc(1, sizeof( struct aout_instance ) );
+		struct rh_aout       * interface = calloc(1, sizeof( struct rh_aout       ) );
 
-int aout_create_ALSA() {
+		if(!instance || !interface) {
+			free(instance);
+			free(interface);
+			return -1;
+		}
 
-	return aout_alsa_io_setup();
-}
+		instance->interface = interface;
+		instance->status_flags = RH_AOUT_STATUS_STOPPED;
 
-int aout_destroy_ALSA() {
+		interface->open  		= &aout_alsa_open;
+		interface->close  		= &aout_alsa_close;
+		interface->update 		= &aout_alsa_update;
+		interface->play 		= &aout_alsa_play;
+		interface->loop 		= &aout_alsa_loop;
+		interface->stop   		= &aout_alsa_stop;
+		interface->set_sample 	= &aout_alsa_set_sample;
+		interface->get_sample   = &aout_alsa_get_sample;
 
-	snd_config_update_free_global();
+		*itf = (rh_aout_itf)instance;
 
-	return aout_alsa_io_teardown();
+		return 0;
+	}
+
+	return -1;
 }
 
