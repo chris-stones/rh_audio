@@ -25,6 +25,7 @@ typedef const struct rh_asmp * const * rh_asmp_itf; /* RockHopper audiosample in
 struct rh_asmp {
 
 	int         (*open)            (rh_asmp_itf  self, const char * const fn);
+	int         (*openf)           (rh_asmp_itf  self, const char * const fn, ...);
 	int         (*close)           (rh_asmp_itf *self); /* thread safe */
 	rh_asmp_itf (*addref)          (rh_asmp_itf  self); /* thread safe */
 	int         (*atend)           (rh_asmp_itf  self);
