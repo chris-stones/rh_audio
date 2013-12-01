@@ -101,16 +101,8 @@ buffer_t * buffer_queue_get_fill_buffer(buffer_queue_t * bq) {
 
 		mutex_unlock(&bq->monitor);
 
-//		if(buffer) {
-//			LOGE("buffer_queue_get_fill_buffer returning buffer with %p", buffer->buffer);
-//		}
-//		else {
-//			LOGE("buffer_queue_get_fill_buffer returning NULL BUFFER");
-//		}
-
 		return buffer;
 	}
-//	LOGE("SHOULDNT HAPPEN %s %d", __FUNCTION__, __LINE__);
 	return NULL; // SHOULDNT HAPPEN
 }
 
@@ -119,8 +111,6 @@ void buffer_queue_return_fill_buffer(buffer_queue_t * bq) {
 	if( mutex_lock(&bq->monitor) == 0) {
 
 		bq->free_drain_buffers++;
-
-		LOGE("buffer_queue_return_fill_buffer %d", bq->free_drain_buffers);
 
 		if(bq->fill_buffer == (bq->buffers + (bq->nb_buffers-1) ) )
 			bq->fill_buffer = bq->buffers;
@@ -189,7 +179,6 @@ int buffer_queue_alloc_buffers(buffer_queue_t * bq) {
 		for(i=0;i<bq->nb_buffers;i++) {
 
 			bq->buffers[i].buffer = calloc(1, bq->buffersize);
-//			LOGE("buffer_queue_alloc_buffers bq->buffers[%d] = %p",i,bq->buffers[i].buffer);
 
 			if(!bq->buffers[i].buffer) {
 
@@ -197,7 +186,6 @@ int buffer_queue_alloc_buffers(buffer_queue_t * bq) {
 					free(bq->buffers[i].buffer);
 				free(bq->buffers);
 
-//				LOGE("buffer_queue_alloc_buffers ERROR");
 				return -1;
 			}
 		}
@@ -206,8 +194,6 @@ int buffer_queue_alloc_buffers(buffer_queue_t * bq) {
 
 		return 0;
 	}
-
-	LOGE("buffer_queue_alloc_buffers ERROR");
 	return -1;
 }
 

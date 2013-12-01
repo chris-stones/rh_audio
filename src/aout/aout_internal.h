@@ -7,7 +7,7 @@
 #include <string.h>
 #include <stdlib.h>
 
-/***************************************** API OUTPUT CHANNEL INTERFACE *********************************/
+/***************************************** OUTPUT CHANNEL INTERFACE *********************************/
 
 struct rh_aout;
 

@@ -18,6 +18,7 @@ typedef enum {
 struct rh_audio {
 
 	int         (*open)        (rh_audio_itf  self, const char * source, int flags);
+	int         (*openf)       (rh_audio_itf  self, int flags, const char * format, ...);
 	int         (*close)       (rh_audio_itf *self);
 	int         (*play)        (rh_audio_itf  self);
 	int         (*loop)        (rh_audio_itf  self);

@@ -146,7 +146,6 @@ static int process_cmd_pipe() {
 		{
 			struct priv_internal * p = get_priv(cmd.h);
 
-//			(*p->playItf)->SetPlayState( p->playItf, SL_PLAYSTATE_PAUSED );
 			(*p->playItf)->SetPlayState( p->playItf, SL_PLAYSTATE_STOPPED );
 
 			(*p->bufferQueueItf)->Clear(p->bufferQueueItf);

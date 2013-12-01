@@ -5,10 +5,13 @@
 #include <string.h>
 #include <stdio.h>
 
-#include "asmp/asmp.h"
-#include "aout/aout.h"
+#include<stdarg.h>
+#include<linux/limits.h>
 
 #include<pthread.h>
+
+#include "asmp/asmp.h"
+#include "aout/aout.h"
 
 static rh_aout_api_itf api_interface = 0;
 
@@ -211,6 +214,26 @@ bad:
 	}
 }
 
+static int _impl_openf(rh_audio_itf  self, int flags, const char * format, ...) {
+
+	int err = 0;
+	char *path = NULL;
+	va_list va;
+	va_start(va, format);
+    if(!((path = malloc(sizeof (char) * PATH_MAX))))
+       err = -1;
+    else if(vsnprintf(path,PATH_MAX,format,va)>=PATH_MAX)
+        err = -1; /* truncated */
+    va_end(va);
+
+	if(!err)
+		err = _impl_open(self, path, flags & ~RH_AUDIO_OPEN_DONTCOPYSOURCE);
+
+	free(path);
+
+	return err;
+}
+
 static int _impl_close(rh_audio_itf *pself) {
 
 	struct audio_instance * instance = (struct audio_instance *)*pself;
@@ -319,12 +342,13 @@ int rh_audio_create( rh_audio_itf * itf ) {
 
 		instance->interface = interface;
 
-		interface->open  		= &_impl_open;
-		interface->close		= &_impl_close;
+		interface->open         = &_impl_open;
+		interface->openf        = &_impl_openf;
+		interface->close        = &_impl_close;
 		interface->play         = &_impl_play;
 		interface->loop         = &_impl_loop;
 		interface->stop         = &_impl_stop;
-		interface->wait			= &_impl_wait;
+		interface->wait         = &_impl_wait;
 		interface->is_playing   = &_impl_is_playing;
 
 good:

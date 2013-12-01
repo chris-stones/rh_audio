@@ -1,9 +1,22 @@
 
 /***
  *
- * Stream audio data from a scorpion5 sound prom.
+ * Using ADPCM to decode audio data from a scorp-5 sound prom image.
  *
+ *      This code supports reading audio from ...
+ *        * PROM on the filesystem.
+ *        * PROM in an android APK. ( TODO )
+ *        * PROM in a rawpak container ( either on filesystem, or android APK ) ( TODO )
+ *
+ * example,
+ *
+ *     rh_asmp_itf itf;
+ *     rh_asmp_create_s5prom( &itf, ... );
+ *     (*itf)->openf( itf, "prom_file://%p/%d",   FILE,       sample_idx );  // load audio from file sounds/sound0.ogg
+ *     (*itf)->openf( itf, "prom_asset://%p/%d",  asset,      sample_idx );  // load audio from a rawpak context.
+ *     (*itf)->openf( itf, "prom_rawpak://%p/%d", rawpak_ctx, sample_idx );  // load audio from android assest sounds/sound0.ogg
  */
+
 
 #include <stdlib.h>
 #include <ctype.h>
@@ -12,6 +25,8 @@
 #include <pthread.h>
 #include <byteswap.h>
 #include <stdint.h>
+#include <stdarg.h>
+#include <linux/limits.h>
 
 #include "asmp.h"
 
@@ -79,13 +94,13 @@ static int _impl_open(rh_asmp_itf self, const char * const fn) {
 
 		// TODO ( load from rh rawpak ) : if(strncmp("rh_rawpak_ctx://",fn,16)==0) {
 
-		if(strncmp("PROM://",fn,7)==0) { /* e.g. "FILE://file_ptr/sample_id */
+		if(strncmp("prom_file://",fn,12)==0) { /* e.g. "FILE://file_ptr/sample_id */
 
 			void * p = NULL;
 			int    sample_index = 0;
 			short  nsamples;
 
-			if(sscanf(fn,"PROM://%p/%d",&p,&sample_index) != 2) {
+			if(sscanf(fn,"prom_file://%p/%d",&p,&sample_index) != 2) {
 				free(instance->frame.buffer);
 				instance->frame.buffer = NULL;
 				instance->frame.buffersize = 0;
@@ -133,6 +148,26 @@ static int _impl_open(rh_asmp_itf self, const char * const fn) {
   return -1;
 }
 
+static int _impl_openf(rh_asmp_itf self, const char * const format, ...) {
+
+	int err = 0;
+	char *path = NULL;
+	va_list va;
+	va_start(va, format);
+    if(!((path = malloc(sizeof (char) * PATH_MAX))))
+       err = -1;
+    else if(vsnprintf(path,PATH_MAX,format,va)>=PATH_MAX)
+        err = -1; /* truncated */
+    va_end(va);
+
+	if(!err)
+		err = _impl_open(self, path);
+
+	free(path);
+
+	return err;
+}
+
 static int _seek(rh_asmp_itf self, long offset, int whence) {
 
 	struct asmp_instance * instance = (struct asmp_instance *)self;
@@ -162,7 +197,6 @@ static inline int _read(void* data, size_t size, size_t nmemb, rh_asmp_itf self)
 	int err = 0;
 
 	err = fseek(instance->asset, instance->readpos + instance->sample_header.start, SEEK_SET);
-
 	if(!err)
 		err = fread(data, size, nmemb, instance->asset );
 
@@ -405,6 +439,7 @@ int rh_asmp_create_s5prom( rh_asmp_itf * itf, asmp_cb_func_t cb_func, void * cb_
 		instance->cb_data = cb_data;
 
 		interface->open  		= &_impl_open;
+		interface->openf        = &_impl_openf;
 		interface->addref       = &_impl_addref;
 		interface->reset		= &_impl_reset;
 		interface->read			= &_impl_read;
