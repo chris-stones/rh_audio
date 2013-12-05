@@ -185,8 +185,8 @@ static int _impl_open(rh_audio_itf self, const char * source, int flags) {
 		goto bad;
 	}
 
-	if((flags & RH_AUDIO_OPEN_DONTCOPYSOURCE)==0) {
-
+//	if((flags & RH_AUDIO_OPEN_DONTCOPYSOURCE)==0)
+	{
 		int l = strlen(source)+1;
 		if((_src = malloc(l)))
 			memcpy(_src,source,l);
@@ -227,7 +227,7 @@ static int _impl_openf(rh_audio_itf  self, int flags, const char * format, ...) 
     va_end(va);
 
 	if(!err)
-		err = _impl_open(self, path, flags & ~RH_AUDIO_OPEN_DONTCOPYSOURCE);
+		err = _impl_open(self, path, flags /* & ~RH_AUDIO_OPEN_DONTCOPYSOURCE */);
 
 	free(path);
 
@@ -242,7 +242,7 @@ static int _impl_close(rh_audio_itf *pself) {
 		(*instance->audio_sample)->close(&instance->audio_sample);
 
 	{
-		if((instance->openflags & RH_AUDIO_OPEN_DONTCOPYSOURCE)==0)
+//		if((instance->openflags & RH_AUDIO_OPEN_DONTCOPYSOURCE)==0)
 			free(instance->source);
 		instance->source = NULL;
 	}

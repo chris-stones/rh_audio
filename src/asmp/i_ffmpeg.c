@@ -1,20 +1,6 @@
 
 /***
- *
- * Using FFMPEG to decode audio data.
- *
- *      This code supports reading audio from ...
- *        * files on the filesystem.
- *        * files in an android APK.
- *        * files in a rawpak container ( either on filesystem, or android APK )
- *
- * example,
- *
- *     rh_asmp_itf itf;
- *     rh_asmp_create_ffmpeg( &itf, ... );
- *     (*itf)->open ( itf, "sounds/sound0.ogg" );                   // load audio from file sounds/sound0.ogg
- *     (*itf)->openf( itf, "rh_rawpak_ctx://%p", rh_rawpak_ctx  );  // load audio from a rawpak context.
- *     (*itf)->open ( itf, "apk://sounds/sound0.ogg");              // load audio from android assest sounds/sound0.ogg
+ * Read in audio-data through FFMPEG.
  */
 
 #include<rh_raw_loader.h>
@@ -25,7 +11,10 @@
 #include<stdarg.h>
 #include<linux/limits.h>
 
-#ifdef __ANDROID__
+#define __SUPPORT_READING_FROM_ANDROID_APK__ 0
+#define __SUPPORT_READING_FROM_FILESYSTEM__  0
+
+#if defined(__ANDROID__) && (__SUPPORT_READING_FROM_ANDROID_APK__)
 	#include<android/asset_manager.h>
 #endif
 
@@ -45,7 +34,7 @@ extern "C" {
 #endif
 /**********************************/
 
-#ifdef __ANDROID__
+#if defined(__ANDROID__) && (__SUPPORT_READING_FROM_ANDROID_APK__)
 	static int apk_open_avformatctx(rh_asmp_itf self, size_t internalBufferSize, AVFormatContext ** format_ctx );
 #endif
 
@@ -70,7 +59,7 @@ struct asmp_instance {
 	pthread_mutex_t monitor;
 	int ref;
 
-#ifdef __ANDROID__
+#if defined(__ANDROID__) && (__SUPPORT_READING_FROM_ANDROID_APK__)
 	struct {
 		void  *avformat_buffer;
 		size_t avformat_buffer_size;
@@ -78,15 +67,18 @@ struct asmp_instance {
 		AAssetManager * assetManager;
 	} android ;
 #endif
-
 };
 
 static int _impl_on_output_event(rh_asmp_itf self, rh_output_event_enum_t ev) {
 
 	struct asmp_instance * instance = (struct asmp_instance *)self;
 
+	int e = 0;
+
 	if( instance->cb_func )
-		(*instance->cb_func)(instance->cb_data, ev);
+		e = (*instance->cb_func)(instance->cb_data, ev);
+
+	return e;
 }
 
 static int _impl_open(rh_asmp_itf self, const char * const fn) {
@@ -101,9 +93,7 @@ static int _impl_open(rh_asmp_itf self, const char * const fn) {
 	}
 
 	{
-		if(strncmp("rh_rawpak_ctx://",fn,16)==0) {
-
-			/* READ audio from a rawpak container, either on disk, or android APK */
+		if(strncmp("ffmpeg_rawpak://",fn,16)==0) {
 
 			void * p = NULL;
 
@@ -117,7 +107,7 @@ static int _impl_open(rh_asmp_itf self, const char * const fn) {
 				return -1;
 			}
 		}
-#ifdef __ANDROID__
+#if defined(__ANDROID__) && (__SUPPORT_READING_FROM_ANDROID_APK__)
 		else if(strncmp("apk://",fn,6) == 0) {
 
 			/* READ audio from a file in the android APK */
@@ -137,6 +127,8 @@ static int _impl_open(rh_asmp_itf self, const char * const fn) {
 			}
 		}
 #endif /*** __ANDROID__ ***/
+
+#if(__SUPPORT_READING_FROM_FILESYSTEM__)
 		else {
 
 			/* READ audio from a file on the disk */
@@ -146,7 +138,9 @@ static int _impl_open(rh_asmp_itf self, const char * const fn) {
 				return -1;
 			}
 		}
+#endif /*** __SUPPORT_READING_FROM_FILESYSTEM__ ***/
 	}
+
 
     if(avformat_find_stream_info(instance->pFormatCtx, NULL)<0) {
     	av_freep(&instance->pFrame);
@@ -340,7 +334,7 @@ static int _impl_close(rh_asmp_itf *pself) {
 		if(instance->pFormatCtx) 	avformat_close_input( &instance->pFormatCtx );
 		if(instance->pFrame)		av_freep(&instance->pFrame);
 
-#ifdef __ANDROID__
+#if defined(__ANDROID__) && (__SUPPORT_READING_FROM_ANDROID_APK__)
 		if(instance->android.asset)
 			AAsset_close(instance->android.asset);
 #endif
@@ -436,7 +430,7 @@ int rh_asmp_create_ffmpeg( rh_asmp_itf * itf, asmp_cb_func_t cb_func, void * cb_
 
 /*************************************** PLAY AUDIO FROM A FILE INSIDE AN APK ***************************************/
 
-#ifdef __ANDROID__
+#if defined(__ANDROID__) && (__SUPPORT_READING_FROM_ANDROID_APK__)
 
 static int apk_read_func(void* ptr, uint8_t* buf, int buf_size)
 {
@@ -548,4 +542,5 @@ static int apk_open_avformatctx(rh_asmp_itf self, size_t internalBufferSize, AVF
 }
 
 #endif /*** __ANDROID__ **/
+
 

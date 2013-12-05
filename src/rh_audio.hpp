@@ -16,13 +16,7 @@ namespace rh {
 
 		class OpenException     : public std::exception {public: const char * what() const throw() { return "AudioSample::OpenException"; } };
 
-		typedef enum {
-
-			OPEN_DONTCOPYSOURCE = RH_AUDIO_OPEN_DONTCOPYSOURCE,
-
-		} open_flags_enum_t;
-
-		AudioSample(const char * source, int flags)
+		AudioSample(int flags, const char * source)
 			:	audio_itf(NULL)
 		{
 			if( rh_audio_create(&audio_itf) != 0 )
@@ -34,10 +28,8 @@ namespace rh {
 
 		~AudioSample() {
 
-			if(audio_itf) {
-				Stop();
+			if(audio_itf)
 				(*audio_itf)->close(&audio_itf);
-			}
 		}
 
 		bool Play()      { return (*audio_itf)->play      (audio_itf) == 0 ? true : false; }

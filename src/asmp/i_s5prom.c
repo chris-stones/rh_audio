@@ -1,22 +1,7 @@
 
 /***
- *
- * Using ADPCM to decode audio data from a scorp-5 sound prom image.
- *
- *      This code supports reading audio from ...
- *        * PROM on the filesystem.
- *        * PROM in an android APK. ( TODO )
- *        * PROM in a rawpak container ( either on filesystem, or android APK ) ( TODO )
- *
- * example,
- *
- *     rh_asmp_itf itf;
- *     rh_asmp_create_s5prom( &itf, ... );
- *     (*itf)->openf( itf, "prom_file://%p/%d",   FILE,       sample_idx );  // load audio from file sounds/sound0.ogg
- *     (*itf)->openf( itf, "prom_asset://%p/%d",  asset,      sample_idx );  // load audio from a rawpak context.
- *     (*itf)->openf( itf, "prom_rawpak://%p/%d", rawpak_ctx, sample_idx );  // load audio from android assest sounds/sound0.ogg
+ * Read in audio-data through ADPCM decoder.
  */
-
 
 #include <stdlib.h>
 #include <ctype.h>
@@ -78,8 +63,12 @@ static int _impl_on_output_event(rh_asmp_itf self, rh_output_event_enum_t ev) {
 
 	struct asmp_instance * instance = (struct asmp_instance *)self;
 
+	int e = 0;
+
 	if( instance->cb_func )
-		(*instance->cb_func)(instance->cb_data, ev);
+		e = (*instance->cb_func)(instance->cb_data, ev);
+
+	return e;
 }
 
 static int _impl_open(rh_asmp_itf self, const char * const fn) {
