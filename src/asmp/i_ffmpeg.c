@@ -19,6 +19,18 @@
 
 #include<rh_raw_loader.h>
 
+#include<stdlib.h>
+#include<stdio.h>
+#include<pthread.h>
+#include<stdarg.h>
+#include<linux/limits.h>
+
+#ifdef __ANDROID__
+	#include<android/asset_manager.h>
+#endif
+
+#include "asmp.h"
+
 /*** INCLUDE FFMPEG ***************/
 #ifndef UINT64_C
 #define UINT64_C(c) (c ## ULL)
@@ -34,17 +46,8 @@ extern "C" {
 /**********************************/
 
 #ifdef __ANDROID__
-	#include<android/asset_manager.h>
 	static int apk_open_avformatctx(rh_asmp_itf self, size_t internalBufferSize, AVFormatContext ** format_ctx );
 #endif
-
-#include<stdlib.h>
-#include<stdio.h>
-#include<pthread.h>
-#include<stdarg.h>
-#include<linux/limits.h>
-
-#include "asmp.h"
 
 struct asmp_instance {
 
@@ -475,9 +478,10 @@ static int apk_open_avformatctx(rh_asmp_itf self, size_t internalBufferSize, AVF
 		return -1;
 
 	pIOCtx = avio_alloc_context(
-		(unsigned char*)instance->android.avformat_buffer, instance->android.avformat_buffer_size,
+		(unsigned char*)instance->android.avformat_buffer,
+		instance->android.avformat_buffer_size,
 		0,
-		self,
+		(void*)self,
 		&apk_read_func,
 		NULL,
 		&apk_seek_func);

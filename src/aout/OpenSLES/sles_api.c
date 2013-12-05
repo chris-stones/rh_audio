@@ -1,5 +1,4 @@
-
-#include "alsa_private.h"
+#include "sles_private.h"
 
 #include<alloca.h>
 #include<pthread.h>
@@ -10,23 +9,13 @@
 #include<fcntl.h>
 #include<stdio.h>
 
+#include <SLES/OpenSLES.h>
+#include <SLES/OpenSLES_Android.h>
+#include <android/asset_manager.h>
+#include <android/native_activity.h>
+#include <android/log.h>
+
 #include"../../bucket.h"
-
-
-struct alsa_api_instance {
-
-    // interface ptr must be the first item in the instance.
-    struct rh_aout_api * interface;
-
-    // private data
-    volatile pthread_t  thread;
-    bucket_handle       aout_itf_bucket;
-
-    struct {
-        int read;
-        int write;
-    } cmd_pipe;
-};
 
 typedef enum {
 
@@ -35,6 +24,8 @@ typedef enum {
     LOOP_COMMAND,
     PLAY_COMMAND,
     STOP_COMMAND,
+
+    CONSUMED_BUFFER,
 
     SYNC_COMMAND,
 
@@ -48,7 +39,7 @@ struct io_command_struct {
 
 static int pipe_send( rh_aout_api_itf self, const struct io_command_struct *cmd ) {
 
-    struct alsa_api_instance * api_instance = (struct alsa_api_instance *)self;
+    struct sles_api_instance * api_instance = (struct sles_api_instance *)self;
 
     char * p = (char*)(cmd+0);
     char * e = (char*)(cmd+1);
@@ -57,7 +48,7 @@ static int pipe_send( rh_aout_api_itf self, const struct io_command_struct *cmd 
         /*
          * The write end of the pipe is in blocking mode, and io_command_struct is smaller than PIPE_BUF.
          * So write will always write the correct number of bytes,
-         * But Im paranoid!
+         * But I'm paranoid!
          */
         int i = write( api_instance->cmd_pipe.write, p, ((size_t)e)-((size_t)p) );
 
@@ -79,7 +70,7 @@ static int pipe_send( rh_aout_api_itf self, const struct io_command_struct *cmd 
 // return negative on error, 0 on nothing read, 1 on struct read.
 static int pipe_recv( rh_aout_api_itf self, struct io_command_struct *cmd ) {
 
-    struct alsa_api_instance * api_instance = (struct alsa_api_instance *)self;
+    struct sles_api_instance * api_instance = (struct sles_api_instance *)self;
 
     char * p = (char*)(cmd+0);
     char * e = (char*)(cmd+1);
@@ -115,11 +106,11 @@ static int add_channels(rh_aout_api_itf self, int channels) {
 
     int i ;
     rh_aout_itf * itf = alloca( channels * sizeof(rh_aout_itf) );
-    struct alsa_api_instance * api_instance = (struct alsa_api_instance *)self;
+    struct sles_api_instance * api_instance = (struct sles_api_instance *)self;
 
     for(i=0; i<channels; i++) {
 		printf("about to create audio channel\n");
-        if( rh_aout_create_alsa(&(itf[i])) != 0) {
+        if( rh_aout_create_sles(self, &(itf[i])) != 0) {
             while(i >= 0) {
                 (*(itf[i]))->close(&(itf[i]));
                 --i;
@@ -144,7 +135,7 @@ static int add_channels(rh_aout_api_itf self, int channels) {
 
 static int close_all_channels(rh_aout_api_itf self) {
 
-    struct alsa_api_instance * api_instance = (struct alsa_api_instance *)self;
+    struct sles_api_instance * api_instance = (struct sles_api_instance *)self;
 
     int len;
     rh_aout_itf * array;
@@ -153,10 +144,8 @@ static int close_all_channels(rh_aout_api_itf self) {
 
         int i;
         for(i=0; i<len; i++)
-			if(array[i]) {
-				printf("array[%d] == %p\n", i, array[i]);
+			if(array[i])
 				(*(array[i]))->close(&array[i]);
-			}
 
         bucket_unlock( api_instance->aout_itf_bucket );
     }
@@ -173,7 +162,7 @@ static int recv_sync_cmd(rh_aout_api_itf self, rh_asmp_itf asmp_itf) {
 
 static int stop(rh_aout_api_itf self, rh_asmp_itf asmp_itf) {
 
-    struct alsa_api_instance * api_instance = (struct alsa_api_instance *)self;
+    struct sles_api_instance * api_instance = (struct sles_api_instance *)self;
 
     int len;
     rh_aout_itf * array;
@@ -205,9 +194,45 @@ static int stop(rh_aout_api_itf self, rh_asmp_itf asmp_itf) {
     return e;
 }
 
+static int recv_consumed_buffer_cmd(rh_aout_api_itf self, rh_asmp_itf asmp_itf) {
+
+	struct sles_api_instance * api_instance = (struct sles_api_instance *)self;
+
+	int len;
+	rh_aout_itf * array;
+	int e = 0;
+
+	if( bucket_lock( api_instance->aout_itf_bucket, (void***)&array, &len ) == 0 ) {
+
+		int i;
+		for(i=0; i<len; i++) {
+
+			rh_asmp_itf audio_sample;
+			rh_aout_itf audio_channel = array[i];
+
+			if( (*audio_channel)->get_sample(audio_channel, &audio_sample) == 0 ) {
+
+				if( audio_sample == asmp_itf ) {
+
+					struct aout_instance * channel_instance =
+						(struct aout_instance *)audio_channel;
+
+					e = buffer_queue_return_drain_buffer( &channel_instance->bq );
+
+					break;
+				}
+			}
+		}
+
+		bucket_unlock( api_instance->aout_itf_bucket );
+	}
+
+	return e;
+}
+
 static int _play(rh_aout_api_itf self, rh_asmp_itf asmp_itf, int loop_flag) {
 
-    struct alsa_api_instance * api_instance = (struct alsa_api_instance *)self;
+    struct sles_api_instance * api_instance = (struct sles_api_instance *)self;
 
     int len;
     rh_aout_itf * array;
@@ -303,7 +328,7 @@ static int loop(rh_aout_api_itf self, rh_asmp_itf asmp_itf) {
 
 static int process_cmd_pipe(rh_aout_api_itf self) {
 
-    struct alsa_api_instance * api_instance = (struct alsa_api_instance *)self;
+    struct sles_api_instance * api_instance = (struct sles_api_instance *)self;
 
     struct io_command_struct cmd;
 
@@ -333,6 +358,9 @@ static int process_cmd_pipe(rh_aout_api_itf self) {
         case SYNC_COMMAND:
             e = recv_sync_cmd(self, cmd.asmp_itf);
             break;
+        case CONSUMED_BUFFER:
+        	e = recv_consumed_buffer_cmd(self, cmd.asmp_itf);
+        	break;
         default:
             break;
         }
@@ -352,91 +380,26 @@ static int process_cmd_pipe(rh_aout_api_itf self) {
     return 0;
 }
 
-static int aout_alsa_io_poll(rh_aout_api_itf self) {
+static int poll_cmd_pipe(rh_aout_api_itf self) {
 
-    struct alsa_api_instance * api_instance = (struct alsa_api_instance *)self;
+	struct sles_api_instance * instance = (struct sles_api_instance *)self;
 
-    rh_aout_itf * array;
-    int len;
-    int err=0;
-    int sleep = 0;
+	struct pollfd ufds[1];
 
-    if( bucket_lock( api_instance->aout_itf_bucket, (void***)&array, &len ) == 0 ) {
+	ufds[0].fd = instance->cmd_pipe.read;
+    ufds[0].revents = 0;
+    ufds[0].events = POLLIN | POLLPRI;
 
-        int i;
-        int fd_count = 1; // reserved 1 for io.cmd_pipe
+	poll( ufds, sizeof ufds / sizeof ufds[0], -1 );
 
-        struct pollfd *ufds = NULL;
-        struct pollfd *ufds_next = NULL;
-
-        // first pass - count file descriptors
-        for(i=0; i<len; i++) {
-
-            struct aout_instance * instance = (struct aout_instance*)array[i];
-            int dc;
-
-            if(!instance || !instance->handle)
-                continue; // output not yet opened.
-
-            if( instance->sleep )
-                continue; // sample is draining, we are not interested in its writability.
-
-            dc = snd_pcm_poll_descriptors_count( instance->handle );
-
-            if(dc >= 0)
-                fd_count += dc;
-            else
-                ++err;
-        }
-
-        // second pass - collect file descriptors.
-        if(fd_count && ( ufds = ufds_next = alloca(sizeof(struct pollfd) * fd_count))) {
-
-            ufds_next[0].fd = api_instance->cmd_pipe.read;
-            ufds_next[0].revents = 0;
-            ufds_next[0].events = POLLIN | POLLPRI;
-            ++ufds_next;
-
-            for(i=0; i<len; i++) {
-
-                struct aout_instance * instance = (struct aout_instance*)array[i];
-
-                if(!instance || !instance->handle)
-                    continue; // output not yet opened.
-
-                // find shortest sleep time of currently draining sample.
-                if( instance->sleep && ( (!sleep) || ( instance->sleep < sleep ) ) )
-                    sleep = instance->sleep;
-
-                if(instance->sleep)
-                    continue; // sample is draining, we have no interest in its writability.
-
-                int n = snd_pcm_poll_descriptors_count( instance->handle );
-
-                if(n>0) {
-                    snd_pcm_poll_descriptors( instance->handle, ufds_next, n );
-                    ufds_next += n;
-                }
-            }
-        }
-        bucket_unlock( api_instance->aout_itf_bucket );
-
-        if(ufds) {
-            int ms = sleep/1000;
-            if(!ms && sleep)
-                ms = 1;
-            poll( ufds, fd_count, ms ? ms : -1 );
-            return 0;
-        }
-    }
-
-    return -1;
+	return 0;
 }
-
 
 static void * api_main_loop(void * itf) {
 
-    struct alsa_api_instance * instance = (struct alsa_api_instance *)itf;
+	rh_aout_api_itf self = (rh_aout_api_itf)itf;
+
+    struct sles_api_instance * instance = (struct sles_api_instance *)itf;
 
     rh_aout_itf * array;
 
@@ -444,9 +407,9 @@ static void * api_main_loop(void * itf) {
 
     for(;;) {
 
-        aout_alsa_io_poll(itf);
+    	poll_cmd_pipe(self);
 
-        process_cmd_pipe(itf);
+        process_cmd_pipe(self);
 
         if( bucket_lock( instance->aout_itf_bucket, (void***)&array, &len ) == 0 ) {
 
@@ -463,7 +426,45 @@ static void * api_main_loop(void * itf) {
 
 static int _impl_setup(rh_aout_api_itf self) {
 
-    struct alsa_api_instance * instance = (struct alsa_api_instance *)self;
+	extern AAssetManager * __rh_hack_get_android_asset_manager();
+
+	static const SLEngineOption options[] = {
+			{ SL_ENGINEOPTION_THREADSAFE, 		SL_BOOLEAN_TRUE },
+			{ SL_ENGINEOPTION_LOSSOFCONTROL, 	SL_BOOLEAN_FALSE },
+	};
+
+    struct sles_api_instance * instance = (struct sles_api_instance *)self;
+
+    instance->asset_manager = __rh_hack_get_android_asset_manager();
+
+    if(!instance->asset_manager)
+    	goto bad;
+
+    if (SL_RESULT_SUCCESS
+			!= slCreateEngine(&instance->engineObject,
+					sizeof(options) / sizeof(options[0]), options, 0, NULL,
+					NULL))
+		goto bad;
+
+	if (SL_RESULT_SUCCESS
+			!= (*instance->engineObject)->Realize(instance->engineObject,
+					SL_BOOLEAN_FALSE ))
+		goto bad;
+
+	if (SL_RESULT_SUCCESS
+			!= (*instance->engineObject)->GetInterface(instance->engineObject,
+					SL_IID_ENGINE, &instance->engineItf))
+		goto bad;
+
+	if (SL_RESULT_SUCCESS
+			!= (*instance->engineItf)->CreateOutputMix(instance->engineItf,
+					&instance->outputMix, 0, NULL, NULL))
+		goto bad;
+
+	if (SL_RESULT_SUCCESS
+			!= (*instance->outputMix)->Realize(instance->outputMix,
+					SL_BOOLEAN_FALSE ))
+		goto bad;
 
     if( pipe( &instance->cmd_pipe.read ) != 0 )
         goto bad;
@@ -490,6 +491,13 @@ good:
     return 0;
 
 bad:
+
+	if( instance->outputMix )
+		(*instance->outputMix)->Destroy(instance->outputMix);
+
+	if( instance->engineObject )
+		(*instance->engineObject)->Destroy(instance->engineObject);
+
     if(instance->aout_itf_bucket) {
         close_all_channels(self);
         bucket_free(instance->aout_itf_bucket);
@@ -503,14 +511,20 @@ bad:
 
 static int _impl_shutdown(rh_aout_api_itf * itf) {
 
-    struct alsa_api_instance * instance;
+    struct sles_api_instance * instance;
 
     if(!itf)
         return -1;
 
-    instance = (struct alsa_api_instance *)*itf;
+    instance = (struct sles_api_instance *)*itf;
 
     if(instance) {
+
+    	if( instance->outputMix )
+			(*instance->outputMix)->Destroy(instance->outputMix);
+
+		if( instance->engineObject )
+			(*instance->engineObject)->Destroy(instance->engineObject);
 
         if(instance->thread) {
             const struct io_command_struct cmd = { EXIT_COMMAND, NULL };
@@ -536,8 +550,6 @@ static int _impl_shutdown(rh_aout_api_itf * itf) {
 
     *itf = NULL;
 
-    snd_config_update_free_global();
-
     return 0;
 }
 
@@ -545,7 +557,7 @@ static int _impl_play(rh_aout_api_itf self, rh_asmp_itf sample) {
 
     int e = -1;
 
-    struct alsa_api_instance * instance = (struct alsa_api_instance *)self;
+    struct sles_api_instance * instance = (struct sles_api_instance *)self;
 
     const struct io_command_struct cmd = { PLAY_COMMAND, sample };
 
@@ -563,7 +575,7 @@ static int _impl_loop(rh_aout_api_itf self, rh_asmp_itf sample) {
 
     int e = -1;
 
-    struct alsa_api_instance * instance = (struct alsa_api_instance *)self;
+    struct sles_api_instance * instance = (struct sles_api_instance *)self;
 
     const struct io_command_struct cmd = { LOOP_COMMAND, sample };
 
@@ -581,7 +593,7 @@ static int _impl_stop(rh_aout_api_itf self, rh_asmp_itf sample) {
 
     int e = -1;
 
-    struct alsa_api_instance * instance = (struct alsa_api_instance *)self;
+    struct sles_api_instance * instance = (struct sles_api_instance *)self;
 
     const struct io_command_struct cmd = { STOP_COMMAND, sample };
 
@@ -599,7 +611,7 @@ static int _impl_sync(rh_aout_api_itf self, rh_asmp_itf sample) {
 
     int e = -1;
 
-    struct alsa_api_instance * instance = (struct alsa_api_instance *)self;
+    struct sles_api_instance * instance = (struct sles_api_instance *)self;
 
     const struct io_command_struct cmd = { SYNC_COMMAND, sample };
 
@@ -613,9 +625,27 @@ static int _impl_sync(rh_aout_api_itf self, rh_asmp_itf sample) {
     return e;
 }
 
+int _impl_consumed_buffer(rh_aout_api_itf self, rh_asmp_itf sample) {
+
+    int e = -1;
+
+    struct sles_api_instance * instance = (struct sles_api_instance *)self;
+
+    const struct io_command_struct cmd = { CONSUMED_BUFFER, sample };
+
+    if( sample ) {
+        // create a reference for the command pipe
+        (*sample)->addref(sample);
+        if((e = pipe_send(self, &cmd))!=0)
+            (*sample)->close(&sample);
+    }
+
+    return e;
+}
+
 int rh_aout_create_api( rh_aout_api_itf * itf ) {
 
-    struct alsa_api_instance * instance  = calloc(1, sizeof( struct alsa_api_instance ) );
+    struct sles_api_instance * instance  = calloc(1, sizeof( struct sles_api_instance ) );
     struct rh_aout_api       * interface = calloc(1, sizeof( struct rh_aout_api       ) );
 
     if(!instance || !interface)

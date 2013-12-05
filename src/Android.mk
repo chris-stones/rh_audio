@@ -8,12 +8,9 @@ LOCAL_C_INCLUDES := $(ffmpeg_INCLUDES)
 LOCAL_EXPORT_CFLAGS := -DRH_TARGET_ANDROID=1
 
 LOCAL_MODULE    := rh_audio
-#LOCAL_SRC_FILES := rh_audio_android.c
-LOCAL_SRC_FILES := rh_audio_linux.c
-LOCAL_SRC_FILES += rh_audio_common.c
-LOCAL_SRC_FILES += asmp/asmp.c asmp/i_ffmpeg.c
-LOCAL_SRC_FILES += aout/aout.c aout/aout_internal.c
-LOCAL_SRC_FILES += aout/OpenSLES/sles.c aout/OpenSLES/io.c aout/OpenSLES/update.c aout/OpenSLES/buffer_queue.c
+LOCAL_SRC_FILES := rh_audio.c
+LOCAL_SRC_FILES += asmp/asmp.c asmp/i_ffmpeg.c asmp/i_s5prom.c
+LOCAL_SRC_FILES += aout/OpenSLES/sles.c aout/OpenSLES/update.c aout/OpenSLES/buffer_queue.c
 LOCAL_SRC_FILES += bucket.c
 
 LOCAL_LDLIBS    += -lOpenSLES

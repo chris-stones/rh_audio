@@ -3,7 +3,7 @@
 #include <stdio.h>
 
 /*
- * Somthing went wrong!
+ * Something went wrong!
  * IF the sample was supposed to be playing, send a stopped event. ( prevent locking up a thread waiting for a sample to finish. )
  * Send an error event, set the channel to free, and stopped.
  */

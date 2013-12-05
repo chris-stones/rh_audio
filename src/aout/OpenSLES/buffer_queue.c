@@ -158,6 +158,7 @@ void buffer_queue_free_buffers(buffer_queue_t * bq) {
 				free(bq->buffers[i].buffer);
 			free(bq->buffers);
 			bq->buffers = NULL;
+			bq->nb_buffers = 0;
 		}
 	}
 }
