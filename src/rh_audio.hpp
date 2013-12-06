@@ -26,6 +26,23 @@ namespace rh {
 				throw OpenException();
 		}
 
+		AudioSample(int flags, const char * format, ...)
+					:	audio_itf(NULL)
+		{
+			if( rh_audio_create(&audio_itf) != 0 )
+				throw OpenException();
+
+			va_list va;
+			va_start(va, format);
+
+			int e = (*audio_itf)->vopenf(audio_itf, flags, format, va);
+
+			va_end(va);
+
+			if( e != 0 )
+				throw OpenException();
+		}
+
 		~AudioSample() {
 
 			if(audio_itf)
