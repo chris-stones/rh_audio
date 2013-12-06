@@ -13,6 +13,8 @@
 #include <stdarg.h>
 #include <linux/limits.h>
 
+#include<rh_raw_loader.h>
+
 #include "asmp.h"
 
 struct sample_header_struct {
@@ -48,7 +50,8 @@ struct asmp_instance {
 	void        *   cb_data;
 	int				ref;
 	int 			ate;
-	FILE * 			asset;
+	FILE * 			asset_file;
+	rh_rawpak_ctx   asset_pak;
 	int 			sample_index;
 	sample_header_t sample_header;
 	size_t 			readpos;
@@ -71,6 +74,26 @@ static int _impl_on_output_event(rh_asmp_itf self, rh_output_event_enum_t ev) {
 	return e;
 }
 
+static int _read_from_asset(rh_asmp_itf self, size_t pos, size_t size, size_t nmemb, void * dst) {
+
+	struct asmp_instance * instance = (struct asmp_instance *)self;
+
+	int e = -1;
+
+	if(instance->asset_file) {
+
+		if(fseek(instance->asset_file, pos, SEEK_SET)==0)
+			e = fread(dst, size, nmemb, instance->asset_file);
+	}
+	else if( instance->asset_pak ) {
+
+		if(rh_rawpak_seek(instance->asset_pak, pos, SEEK_SET)==0)
+			e = rh_rawpak_read(dst, size, nmemb, instance->asset_pak );
+	}
+
+	return e;
+}
+
 static int _impl_open(rh_asmp_itf self, const char * const fn) {
 
   struct asmp_instance * instance = (struct asmp_instance *)self;
@@ -81,51 +104,52 @@ static int _impl_open(rh_asmp_itf self, const char * const fn) {
 
   if(( instance->frame.buffer = malloc(instance->frame.buffersize) )) {
 
-		// TODO ( load from rh rawpak ) : if(strncmp("rh_rawpak_ctx://",fn,16)==0) {
+	  	FILE * file         = NULL;
+	  	rh_rawpak_ctx pak   = NULL;
+	  	int    sample_index = 0;
+	  	short  nsamples     = 0;
 
-		if(strncmp("prom_file://",fn,12)==0) { /* e.g. "FILE://file_ptr/sample_id */
+	  	if((sscanf(fn,"prom_rawpak://%p/%d" ,&file,&sample_index) != 2) &&
+	  	   (sscanf(fn,"prom_fileptr://%p/%d",&pak, &sample_index) != 2))
+	  	{
+	  		free(instance->frame.buffer);
+			instance->frame.buffer = NULL;
+			instance->frame.buffersize = 0;
+			return -1;
+	  	}
 
-			void * p = NULL;
-			int    sample_index = 0;
-			short  nsamples;
+		instance->asset_file = file;
+		instance->asset_pak  = pak;
+		instance->sample_index = sample_index;
 
-			if(sscanf(fn,"prom_file://%p/%d",&p,&sample_index) != 2) {
-				free(instance->frame.buffer);
-				instance->frame.buffer = NULL;
-				instance->frame.buffersize = 0;
-				return -1;
-			}
+		if( _read_from_asset(self, 14, 2, 1, &nsamples) != 1 )
+			nsamples = 0;
 
-			instance->asset = (FILE*)p;
-			instance->sample_index = sample_index;
-
-			fseek(instance->asset, 14, SEEK_SET);
-			fread(&nsamples, 2, 1, instance->asset);
-			if(is_little_endian()) {
-				nsamples = bswap_16(nsamples);
-			}
-
-			if(sample_index >= nsamples) {
-				free(instance->frame.buffer);
-				instance->frame.buffer = NULL;
-				instance->frame.buffersize = 0;
-				return -1;
-			}
-
-			fseek(instance->asset, 16 + 10 * sample_index, SEEK_SET);
-			fread(&instance->sample_header, sizeof instance->sample_header, 1, instance->asset);
-			if(is_little_endian())
-			{
-				instance->sample_header.freq  = bswap_16(instance->sample_header.freq);
-				instance->sample_header.start = bswap_32(instance->sample_header.start);
-				instance->sample_header.end   = bswap_32(instance->sample_header.end);
-			}
+		if(is_little_endian()) {
+			nsamples = bswap_16(nsamples);
 		}
-		else {
 
+		if(sample_index >= nsamples) {
 			free(instance->frame.buffer);
 			instance->frame.buffer = NULL;
+			instance->frame.buffersize = 0;
 			return -1;
+		}
+
+		if( _read_from_asset(
+				self,
+				16 + 10 * sample_index,
+				sizeof instance->sample_header, 1,
+				&instance->sample_header) != 1 )
+		{
+			nsamples = 0;
+		}
+
+		if(is_little_endian())
+		{
+			instance->sample_header.freq  = bswap_16(instance->sample_header.freq);
+			instance->sample_header.start = bswap_32(instance->sample_header.start);
+			instance->sample_header.end   = bswap_32(instance->sample_header.end);
 		}
 
 		// reset all state, and pre-load first packet.
@@ -183,11 +207,12 @@ static inline int _read(void* data, size_t size, size_t nmemb, rh_asmp_itf self)
 
 	struct asmp_instance * instance = (struct asmp_instance *)self;
 
-	int err = 0;
-
-	err = fseek(instance->asset, instance->readpos + instance->sample_header.start, SEEK_SET);
-	if(!err)
-		err = fread(data, size, nmemb, instance->asset );
+	int err =
+		_read_from_asset(
+			self,
+			instance->readpos + instance->sample_header.start,
+			size,nmemb,
+			data);
 
 	if( err < 0)
 		return err;
@@ -267,7 +292,7 @@ static int _impl_read(rh_asmp_itf self, int samples, void * dst) {
 
 	int ret = 0;
 
-	samples &= (~1); // ASSUMING 16bit mono ( 2 samles per byte )
+	samples &= (~1); // ASSUMING 16bit mono ( 2 samples per byte )
 
 	if(instance->frame.processed_samples >= instance->frame.nbsamples ) {
 

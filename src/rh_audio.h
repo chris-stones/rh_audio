@@ -13,6 +13,9 @@ typedef const struct rh_audio * const * rh_audio_itf; /* RockHopper audio interf
 #define RH_AUDIO_URL_PROM_RAWPAK(rawpak_ptr, sample_int)\
 	"prom_rawpak://%p/%d",path_str,sample_int
 
+#define RH_AUDIO_URL_FROM_FILEPTR(FILE_ptr, sample_int)\
+	"prom_fileptr://%p/%d",FILE_ptr,sample_int
+
 //#define RH_AUDIO_URL_PROM_FILESYSTEM(path_string,sample_int)\
 //	"prom_filesystem://%s/%d",path_string,sample_int
 
