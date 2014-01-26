@@ -72,7 +72,7 @@ static int create_channel(rh_aout_itf self) {
 			instance->samplesize * 8,
 			instance->samplesize * 8,
 			channelMask,
-			SL_BYTEORDER_LITTLEENDIAN
+			(instance->bigendian ? SL_BYTEORDER_BIGENDIAN : SL_BYTEORDER_LITTLEENDIAN )
 		};
 		SLDataSource audioSrc = {&loc_bufq, &format_pcm};
 
@@ -119,17 +119,21 @@ static int create_channel(rh_aout_itf self) {
 	return 0;
 }
 
-int aout_sles_open(rh_aout_itf self, unsigned int channels, unsigned int rate, unsigned int samplesize) {
+int aout_sles_open(rh_aout_itf self, unsigned int channels, unsigned int rate, unsigned int samplesize, unsigned int bigendian) {
 
 	struct aout_instance * instance = (struct aout_instance *)self;
 
 	if( instance != NULL ) {
 
-		if(instance->channels == channels && instance->samplerate == rate && instance->samplesize != samplesize)
+		if(instance->channels == channels &&
+		   instance->samplerate == rate &&
+		   instance->samplesize == samplesize &&
+		   instance->bigendian == bigendian) {
 			return 0; // channel is already open, and the correct format.
+		}
 
 		// channel is open, but the wrong format, close it.
-		destroy_channel(h);
+		destroy_channel(self);
 	}
 
 	// open new channel.
@@ -139,11 +143,12 @@ int aout_sles_open(rh_aout_itf self, unsigned int channels, unsigned int rate, u
 			instance->channels = channels;
 			instance->samplerate = rate;
 			instance->samplesize = samplesize;
+			instance->bigendian = bigendian;
 
 			buffer_queue_alloc( &instance->bq, 3, 32 * 1024 ); // 3 32k periods.
 			buffer_queue_alloc_buffers(&instance->bq);
 
-			create_channel(h);
+			create_channel(self);
 
 			return 0;
 		}

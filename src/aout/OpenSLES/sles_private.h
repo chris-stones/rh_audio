@@ -51,13 +51,14 @@ struct aout_instance {
 	int channels;
 	int samplerate;
 	int samplesize;
+	int bigendian;
 
 	buffer_queue_t bq;
 
 	int status_flags;
 };
 
-int aout_sles_open(rh_aout_itf self, unsigned int channels, unsigned int rate, unsigned int samplesize);
+int aout_sles_open(rh_aout_itf self, unsigned int channels, unsigned int rate, unsigned int samplesize, unsigned int bigendian);
 int aout_sles_close(rh_aout_itf * pself);
 int aout_sles_update(rh_aout_itf self);
 int aout_sles_play( rh_aout_itf self );

@@ -5,7 +5,7 @@
 
 int rh_aout_create_alsa( rh_aout_itf * itf );
 
-int aout_alsa_open(rh_aout_itf self, uint32_t channels, uint32_t samplerate, uint32_t samplesize);
+int aout_alsa_open(rh_aout_itf self, uint32_t channels, uint32_t samplerate, uint32_t samplesize, uint32_t bigendian);
 int aout_alsa_update(rh_aout_itf self);
 int aout_alsa_close(rh_aout_itf * self);
 int aout_alsa_hw_settings(rh_aout_itf self, snd_pcm_format_t format, unsigned int channels, unsigned int rate);
@@ -46,6 +46,7 @@ struct aout_instance {
   int samplerate;
   int samplesize;
   int channels;
+  int bigendian;
 
   // hardware setings
   snd_pcm_hw_params_t *hwparams;

@@ -4,30 +4,32 @@
 
 #include "alsa_private.h"
 
-static snd_pcm_format_t _determine_format(unsigned int samplesize) {
+static snd_pcm_format_t _determine_format(unsigned int samplesize, int bigendian) {
+
 
 	switch(samplesize) {
 		case 1: return SND_PCM_FORMAT_S8;
-		case 2: return SND_PCM_FORMAT_S16_LE;
-		case 4: return SND_PCM_FORMAT_S32_LE;
+		case 2: return bigendian ? SND_PCM_FORMAT_S16_BE : SND_PCM_FORMAT_S16_LE;
+		case 4: return bigendian ? SND_PCM_FORMAT_S32_BE : SND_PCM_FORMAT_S32_LE;
 		default:
 			return SND_PCM_FORMAT_UNKNOWN;
 	}
 }
 
-static int _aout_alsa_open(rh_aout_itf self, unsigned int channels, unsigned int samplerate, unsigned int samplesize) {
+static int _aout_alsa_open(rh_aout_itf self, unsigned int channels, unsigned int samplerate, unsigned int samplesize, int bigendian) {
 
   struct aout_instance * instance = (struct aout_instance *)self;
 
   snd_pcm_t * snd_handle;
 
-  snd_pcm_format_t format = _determine_format(samplesize);
+  snd_pcm_format_t format = _determine_format(samplesize, bigendian);
 
   printf("_aout_alsa_open %p %d %d %d\n", self, channels, samplerate, samplesize);
 
   instance->channels = channels;
   instance->samplerate = samplerate;
   instance->samplesize = samplesize;
+  instance->bigendian  = bigendian;
 
   if( snd_pcm_open(&snd_handle, "default", SND_PCM_STREAM_PLAYBACK, 0) < 0 ) {
 	printf("snd_pcm_open error\n");
@@ -65,11 +67,15 @@ err0:
   return -1;
 }
 
-int aout_alsa_open(rh_aout_itf self, uint32_t channels, uint32_t samplerate, uint32_t samplesize) {
+int aout_alsa_open(rh_aout_itf self, uint32_t channels, uint32_t samplerate, uint32_t samplesize, uint32_t bigendian) {
 
 	struct aout_instance * instance = (struct aout_instance *)self;
 
-	if( instance && instance->channels == channels && instance->samplerate == samplerate && instance->samplesize == samplesize ) {
+	if( instance &&
+		instance->channels   == channels &&
+		instance->samplerate == samplerate &&
+		instance->samplesize == samplesize &&
+		instance->bigendian  == bigendian) {
 
 		// channel already open, and the correct format
 		return 0;
@@ -80,6 +86,6 @@ int aout_alsa_open(rh_aout_itf self, uint32_t channels, uint32_t samplerate, uin
 		aout_alsa_close_api_nolock(&self);
 	}
 
-	return _aout_alsa_open(self, channels, samplerate, samplesize);
+	return _aout_alsa_open(self, channels, samplerate, samplesize, bigendian);
 }
 

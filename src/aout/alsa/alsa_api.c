@@ -255,6 +255,10 @@ static int _play(rh_aout_api_itf self, rh_asmp_itf asmp_itf, int loop_flag) {
 
                         if( audio_sample == NULL ) {
 
+                        	int bigendian = 0;
+                        	if((*asmp_itf)->is_bigendian)
+                        		bigendian = (*asmp_itf)->is_bigendian(asmp_itf);
+
                             found = 1;
 
                             (*audio_channel)->set_sample(audio_channel, asmp_itf);
@@ -263,7 +267,8 @@ static int _play(rh_aout_api_itf self, rh_asmp_itf asmp_itf, int loop_flag) {
                                 audio_channel,
                                 (*asmp_itf)->channels(asmp_itf),
                                 (*asmp_itf)->samplerate(asmp_itf),
-                                (*asmp_itf)->samplesize(asmp_itf) );
+                                (*asmp_itf)->samplesize(asmp_itf),
+                                bigendian);
 
                             if(loop_flag)
                                 e = (*audio_channel)->loop(audio_channel);
