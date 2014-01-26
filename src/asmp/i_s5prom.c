@@ -71,8 +71,23 @@ struct asmp_instance {
 	pthread_mutex_t monitor;
 };
 
-static int is_little_endian() 	{ int n = 1; return(*(char *)&n == 1); }
-static int is_big_endian() 		{ int n = 1; return(*(char *)&n == 0); }
+#if defined(__BYTE_ORDER__) && (__BYTE_ORDER__ == __ORDER_BIG_ENDIAN__)
+#define RH_BIG_ENDIAN
+#endif
+
+#if defined(__BYTE_ORDER__) && (__BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__)
+#define RH_LITTLE_ENDIAN
+#endif
+
+#if defined(RH_LITTLE_ENDIAN)
+	#define RH_IS_LITTLE_ENDIAN 1
+	#define RH_IS_BIG_ENDIAN 0
+#elif defined(RH_BIG_ENDIAN)
+	#define RH_IS_LITTLE_ENDIAN 0
+	#define RH_IS_BIG_ENDIAN 1
+#else
+	#error cannot determine endianness!
+#endif
 
 static int _impl_on_output_event(rh_asmp_itf self, rh_output_event_enum_t ev) {
 
@@ -155,7 +170,7 @@ static int _impl_open(rh_asmp_itf self, const char * const fn) {
 		if( _read_from_asset(self, 14, 2, 1, &nsamples) != 1 )
 			nsamples = 0;
 
-		if(is_little_endian()) {
+		if(RH_IS_LITTLE_ENDIAN) {
 			nsamples = bswap_16(nsamples);
 		}
 
@@ -171,7 +186,7 @@ static int _impl_open(rh_asmp_itf self, const char * const fn) {
 			nsamples = 0;
 		}
 
-		if(is_little_endian())
+		if(RH_IS_LITTLE_ENDIAN)
 		{
 			instance->sample_header.freq  = bswap_16(instance->sample_header.freq);
 			instance->sample_header.start = bswap_32(instance->sample_header.start);
@@ -328,7 +343,20 @@ static int _impl_reset(rh_asmp_itf self) {
 	return 0;
 }
 
-static int _impl_read(rh_asmp_itf self, int samples, void * dst) {
+typedef	union {
+	uint16_t value;
+	struct {
+#if RH_IS_LITTLE_ENDIAN
+		uint8_t lower;
+		uint8_t upper;
+#else
+		uint8_t upper;
+		uint8_t lower;
+#endif
+	} field;
+} audio_sample16_t;
+
+static int _de_adpcm(rh_asmp_itf self, int samples, void * dst, int mixmode) {
 
 	struct asmp_instance * instance = (struct asmp_instance *)self;
 
@@ -365,8 +393,11 @@ static int _impl_read(rh_asmp_itf self, int samples, void * dst) {
 		uint32_t size = (samples/2); // ASSUMING 16bit mono
 		int8_t * outBuffer = (int8_t *)(dst);
 		uint8_t * srcBuffer = instance->frame.buffer + (instance->frame.processed_samples / 2);
+
 		while(Position != size)
 		{
+			int8_t mixBuffer[4];
+
 			/* compute the new amplitude and update the current step */
 			uint8_t Data = srcBuffer[Position] >> 4;
 			instance->frame.signal += (instance->frame.step * diff_lookup[Data & 15]) / 8;
@@ -379,14 +410,14 @@ static int _impl_read(rh_asmp_itf self, int samples, void * dst) {
 
 			if (instance->frame.step > 0x6000) instance->frame.step = 0x6000; else if (instance->frame.step < 0x7f) instance->frame.step = 0x7f;
 
-			/* output to the buffer, scaling by the volume */
-			if(!is_big_endian()) {
-				*outBuffer++ = (int8_t)(instance->frame.signal & 0xff);
-				*outBuffer++ = (int8_t)((instance->frame.signal >> 8) & 0xff);
-			} else {
-				*outBuffer++ = (int8_t)((instance->frame.signal >> 8) & 0xff);
-				*outBuffer++ = (int8_t)(instance->frame.signal & 0xff);
-			}
+			/* output to the buffer */
+//			if(RH_IS_LITTLE_ENDIAN) {
+//				mixBuffer[0] = (int8_t)(instance->frame.signal & 0xff);
+//				mixBuffer[1] = (int8_t)((instance->frame.signal >> 8) & 0xff);
+//			} else {
+				mixBuffer[0] = (int8_t)((instance->frame.signal >> 8) & 0xff);
+				mixBuffer[1] = (int8_t)(instance->frame.signal & 0xff);
+//			}
 
 			//added part
 			Data = srcBuffer[Position] & 0x0F;
@@ -400,15 +431,43 @@ static int _impl_read(rh_asmp_itf self, int samples, void * dst) {
 
 			if (instance->frame.step > 0x6000) instance->frame.step = 0x6000; else if (instance->frame.step < 0x7f) instance->frame.step = 0x7f;
 
-			/* output to the buffer, scaling by the volume */
-			if(!is_big_endian()) {
-				*outBuffer++ = (int8_t)(instance->frame.signal & 0xff);
-				*outBuffer++ = (int8_t)((instance->frame.signal >> 8) & 0xff);
-			} else {
-				*outBuffer++ = (int8_t)((instance->frame.signal >> 8) & 0xff);
-				*outBuffer++ = (int8_t)(instance->frame.signal & 0xff);
+			/* output to the buffer  */
+//			if(RH_IS_LITTLE_ENDIAN) {
+//				mixBuffer[2] = (int8_t)(instance->frame.signal & 0xff);
+//				mixBuffer[3] = (int8_t)((instance->frame.signal >> 8) & 0xff);
+//			} else {
+				mixBuffer[2] = (int8_t)((instance->frame.signal >> 8) & 0xff);
+				mixBuffer[3] = (int8_t)(instance->frame.signal & 0xff);
+//			}
+
+			// audio-data is big-endian.
+
+			if(mixmode) {
+
+#if RH_IS_BIG_ENDIAN
+				(*(int16_t*)(outBuffer+0)) += (*(int16_t*)mixBuffer+0);
+				(*(int16_t*)(outBuffer+2)) += (*(int16_t*)mixBuffer+2);
+#else
+				audio_sample16_t d0,d1,s0,s1;
+				d0.field.upper = outBuffer[0];
+				d0.field.lower = outBuffer[1];
+				d1.field.upper = outBuffer[2];
+				d1.field.lower = outBuffer[3];
+				s0.field.upper = mixBuffer[0];
+				s0.field.lower = mixBuffer[1];
+				s1.field.upper = mixBuffer[2];
+				s1.field.lower = mixBuffer[3];
+				d0.value += s0.value;
+				d1.value += s1.value;
+				(*(int16_t*)(outBuffer+0)) = bswap_16(d0.value);
+				(*(int16_t*)(outBuffer+2)) = bswap_16(d1.value);
+#endif
+			}
+			else {
+				(*(int32_t*)outBuffer) = (*(int32_t*)mixBuffer);
 			}
 
+			outBuffer+=4;
 			Position++;
 		}
 	}
@@ -419,6 +478,16 @@ static int _impl_read(rh_asmp_itf self, int samples, void * dst) {
 		instance->frame.is_reset = 0;
 
     return samples;
+}
+
+static int _impl_read(rh_asmp_itf self, int samples, void * dst) {
+
+	return _de_adpcm(self, samples, dst, 0);
+}
+
+static int _impl_mix(rh_asmp_itf self, int samples, void * dst) {
+
+	return _de_adpcm(self, samples, dst, 1);
 }
 
 static int _impl_atend(rh_asmp_itf self) {
@@ -467,6 +536,11 @@ static int _impl_channels(rh_asmp_itf pself) {
 	return 1; // mono
 }
 
+static int _impl_bigendian(rh_asmp_itf pself) {
+
+	return 1; // big endian!
+}
+
 static rh_asmp_itf _impl_addref(rh_asmp_itf self) {
 
 	struct asmp_instance * instance = (struct asmp_instance *)self;
@@ -509,11 +583,13 @@ int rh_asmp_create_s5prom( rh_asmp_itf * itf, asmp_cb_func_t cb_func, void * cb_
 		interface->addref       = &_impl_addref;
 		interface->reset		= &_impl_reset;
 		interface->read			= &_impl_read;
+		interface->mix			= &_impl_mix;
 		interface->atend 		= &_impl_atend;
 		interface->close 		= &_impl_close;
 		interface->samplerate 	= &_impl_samplerate;
 		interface->samplesize 	= &_impl_samplesize;
 		interface->channels		= &_impl_channels;
+		interface->is_bigendian = &_impl_bigendian;
 
 		interface->on_output_event = &_impl_on_output_event;
 
