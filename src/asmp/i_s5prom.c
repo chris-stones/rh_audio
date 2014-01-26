@@ -3,6 +3,14 @@
  * Read in audio-data through ADPCM decoder.
  */
 
+// RH_RAW_LOADER is only really needed as an Android disk/asset IO wrapper!
+#if defined(__ANDROID__)
+#define WITH_RH_RAW_LOADER 0
+#endif
+
+// ADPCM - MUST BE A MULTIPLE OF 4! ( 1000 bytes == 125 milliseconds @ 16khz )
+#define S5PROM_MAX_DISK_BUFFER_SIZE (2 * 1024 * 1024)
+
 #include <stdlib.h>
 #include <ctype.h>
 #include <stdio.h>
@@ -13,7 +21,9 @@
 #include <stdarg.h>
 #include <linux/limits.h>
 
+#if WITH_RH_RAW_LOADER
 #include<rh_raw_loader.h>
+#endif
 
 #include "asmp.h"
 
@@ -51,7 +61,9 @@ struct asmp_instance {
 	int				ref;
 	int 			ate;
 	FILE * 			asset_file;
+#if WITH_RH_RAW_LOADER
 	rh_rawpak_ctx   asset_pak;
+#endif
 	int 			sample_index;
 	sample_header_t sample_header;
 	size_t 			readpos;
@@ -74,6 +86,14 @@ static int _impl_on_output_event(rh_asmp_itf self, rh_output_event_enum_t ev) {
 	return e;
 }
 
+//static int _can_buffer_hold_entire_sample(rh_asmp_itf self) {
+//
+//	struct asmp_instance * instance = (struct asmp_instance *)self;
+//
+//	return instance->frame.buffersize >=
+//			(instance->sample_header.end - instance->sample_header.start);
+//}
+
 static int _read_from_asset(rh_asmp_itf self, size_t pos, size_t size, size_t nmemb, void * dst) {
 
 	struct asmp_instance * instance = (struct asmp_instance *)self;
@@ -85,11 +105,13 @@ static int _read_from_asset(rh_asmp_itf self, size_t pos, size_t size, size_t nm
 		if(fseek(instance->asset_file, pos, SEEK_SET)==0)
 			e = fread(dst, size, nmemb, instance->asset_file);
 	}
+#if WITH_RH_RAW_LOADER
 	else if( instance->asset_pak ) {
 
 		if(rh_rawpak_seek(instance->asset_pak, pos, SEEK_SET)==0)
 			e = rh_rawpak_read(dst, size, nmemb, instance->asset_pak );
 	}
+#endif
 
 	return e;
 }
@@ -98,28 +120,36 @@ static int _impl_open(rh_asmp_itf self, const char * const fn) {
 
   struct asmp_instance * instance = (struct asmp_instance *)self;
 
-  // ADPCM - MUST BE A MULTIPLE OF 4!
-  instance->frame.buffersize = 1000; // 125ms
+
+  const int buffersize = S5PROM_MAX_DISK_BUFFER_SIZE;
+
+  instance->frame.buffersize = 0;
+  instance->frame.buffer = NULL;
   instance->frame.step = 0x7f;
 
-  if(( instance->frame.buffer = malloc(instance->frame.buffersize) )) {
-
+//if(( instance->frame.buffer = malloc(instance->frame.buffersize) ))
+  {
 	  	FILE * file         = NULL;
+#if WITH_RH_RAW_LOADER
 	  	rh_rawpak_ctx pak   = NULL;
+#endif
 	  	int    sample_index = 0;
 	  	short  nsamples     = 0;
 
-	  	if((sscanf(fn,"prom_rawpak://%p/%d" ,&file,&sample_index) != 2) &&
-	  	   (sscanf(fn,"prom_fileptr://%p/%d",&pak, &sample_index) != 2))
+	  	if(
+	  		  (sscanf(fn,"prom_rawpak://%p/%d" ,&file,&sample_index) != 2)
+#if WITH_RH_RAW_LOADER
+	  	   && (sscanf(fn,"prom_fileptr://%p/%d",&pak, &sample_index) != 2)
+#endif
+	  	  )
 	  	{
-	  		free(instance->frame.buffer);
-			instance->frame.buffer = NULL;
-			instance->frame.buffersize = 0;
 			return -1;
 	  	}
 
 		instance->asset_file = file;
+#if WITH_RH_RAW_LOADER
 		instance->asset_pak  = pak;
+#endif
 		instance->sample_index = sample_index;
 
 		if( _read_from_asset(self, 14, 2, 1, &nsamples) != 1 )
@@ -129,12 +159,8 @@ static int _impl_open(rh_asmp_itf self, const char * const fn) {
 			nsamples = bswap_16(nsamples);
 		}
 
-		if(sample_index >= nsamples) {
-			free(instance->frame.buffer);
-			instance->frame.buffer = NULL;
-			instance->frame.buffersize = 0;
+		if(sample_index >= nsamples)
 			return -1;
-		}
 
 		if( _read_from_asset(
 				self,
@@ -150,6 +176,15 @@ static int _impl_open(rh_asmp_itf self, const char * const fn) {
 			instance->sample_header.freq  = bswap_16(instance->sample_header.freq);
 			instance->sample_header.start = bswap_32(instance->sample_header.start);
 			instance->sample_header.end   = bswap_32(instance->sample_header.end);
+		}
+
+		instance->frame.buffersize = buffersize;
+		if(instance->frame.buffersize >= (instance->sample_header.end - instance->sample_header.start) )
+			instance->frame.buffersize = (instance->sample_header.end - instance->sample_header.start);
+
+		if((instance->frame.buffer = malloc( instance->frame.buffersize )) == NULL ) {
+			instance->frame.buffersize = 0;
+			return -1;
 		}
 
 		// reset all state, and pre-load first packet.
@@ -233,19 +268,38 @@ static int _adpcm_read_packet(rh_asmp_itf self) {
 
 	int err = 0;
 
-	instance->frame.nbsamples = 0;
+	size_t s = instance->sample_header.end - instance->sample_header.start;
 
-	err = _read( instance->frame.buffer, 1, instance->frame.buffersize, self );
+	if(instance->frame.nbsamples == (s * 2)) {
 
-	if( err <= 0) {
+		// frame buffer holds entire sample, avoid the disk!
+		if( instance->frame.processed_samples >= instance->frame.nbsamples ) {
 
-		instance->ate = 1; // SET END OF STREAM
+			// paranoia!
+			instance->frame.processed_samples = instance->frame.nbsamples;
+
+			// at-end - set the flag!
+			instance->ate = 1;
+		}
 		return err;
 	}
+	else {
 
-	instance->frame.nbsamples = err * 2; // ASSUMING 16bit mono,
+		instance->frame.nbsamples = 0;
+		instance->frame.processed_samples = 0;
 
-	return err;
+		err = _read( instance->frame.buffer, 1, instance->frame.buffersize, self );
+
+		if( err <= 0) {
+
+			instance->ate = 1; // SET END OF STREAM
+			return err;
+		}
+
+		instance->frame.nbsamples = err * 2; // ASSUMING 16bit mono,
+
+		return err;
+	}
 }
 
 static int _impl_reset(rh_asmp_itf self) {
@@ -256,21 +310,20 @@ static int _impl_reset(rh_asmp_itf self) {
 		return 0;
 
 	_seek(self, 0, SEEK_SET);
-	instance->ate= 0;
 
 	// reset decoder state.
 	instance->frame.signal = 0;
 	instance->frame.step = 0x7f;
 
-	// reset buffer state.
-	instance->frame.processed_samples = 0;
-	instance->frame.nbsamples = 0;
-
 	// pre-load first frame.
+	instance->frame.processed_samples = 0;
 	_adpcm_read_packet(self);
 
 	// flag buffer as being in a reset state;
 	instance->frame.is_reset = 1;
+
+	// clear at-end flag.
+	instance->ate= 0;
 
 	return 0;
 }
@@ -296,7 +349,6 @@ static int _impl_read(rh_asmp_itf self, int samples, void * dst) {
 
 	if(instance->frame.processed_samples >= instance->frame.nbsamples ) {
 
-		instance->frame.processed_samples = 0;
 		_adpcm_read_packet(self);
 	}
 
