@@ -164,17 +164,14 @@ static int _impl_open(rh_audio_itf self, const char * source, int flags) {
 
 	int err = -1;
 
-	if(err != 0) {
-		err = rh_asmp_create(&audio_sample, RH_ASMP_IMP_DEFAULT, &_on_output_event, (void*)self);
-		printf(" rh_asmp_create(&audio_sample, RH_ASMP_IMP_DEFAULT) == %d\n", err);
-	}
-	if(err != 0 && RH_ASMP_IMP_DEFAULT != RH_ASMP_IMP_FFMPEG) {
-		err = rh_asmp_create(&audio_sample, RH_ASMP_IMP_FFMPEG, &_on_output_event, (void*)self);
-		printf(" rh_asmp_create(&audio_sample, RH_ASMP_IMP_FFMPEG) == %d\n", err);
-	}
-	if(err != 0 && RH_ASMP_IMP_DEFAULT != RH_ASMP_IMP_S5PROM) {
+	if(err != 0 && (strncmp("prom_", source, 5) == 0) ) {
 		err = rh_asmp_create(&audio_sample, RH_ASMP_IMP_S5PROM, &_on_output_event, (void*)self);
 		printf(" rh_asmp_create(&audio_sample, RH_ASMP_IMP_S5PROM) == %d\n", err);
+	}
+
+	if(err != 0) {
+		err = rh_asmp_create(&audio_sample, RH_ASMP_IMP_FFMPEG, &_on_output_event, (void*)self);
+		printf(" rh_asmp_create(&audio_sample, RH_ASMP_IMP_FFMPEG) == %d\n", err);
 	}
 
 	if(err != 0)

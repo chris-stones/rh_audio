@@ -9,7 +9,8 @@
 #endif
 
 // ADPCM - MUST BE A MULTIPLE OF 4! ( 1000 bytes == 125 milliseconds @ 16khz )
-#define S5PROM_MAX_DISK_BUFFER_SIZE (2 * 1024 * 1024)
+//#define S5PROM_MAX_DISK_BUFFER_SIZE (2 * 1024 * 1024)
+#define S5PROM_MAX_DISK_BUFFER_SIZE (4)
 
 #include <stdlib.h>
 #include <ctype.h>
@@ -152,9 +153,9 @@ static int _impl_open(rh_asmp_itf self, const char * const fn) {
 	  	short  nsamples     = 0;
 
 	  	if(
-	  		  (sscanf(fn,"prom_rawpak://%p/%d" ,&file,&sample_index) != 2)
+	  		  (sscanf(fn,"prom_fileptr://%p/%d" ,&file,&sample_index) != 2)
 #if WITH_RH_RAW_LOADER
-	  	   && (sscanf(fn,"prom_fileptr://%p/%d",&pak, &sample_index) != 2)
+	  	   && (sscanf(fn,"prom_rawpak://%p/%d",&pak, &sample_index) != 2)
 #endif
 	  	  )
 	  	{
