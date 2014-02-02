@@ -1,10 +1,15 @@
 
 add_definitions(-fPIC)
 
-add_subdirectory(alsa)
-add_subdirectory(OpenSLES)
+if($ENV{RH_AOUT} STREQUAL "ALSA")
+	add_subdirectory(alsa)
+endif()
 
-#FILE(GLOB c_source_files *.c)
-#add_library(aout STATIC ${c_source_files} )
-#install (TARGETS aout  DESTINATION lib/rockhopper)
-#target_link_libraries (aout pthread rt)
+if($ENV{RH_AOUT} STREQUAL "OpenSLES")
+	add_subdirectory(OpenSLES)
+endif()
+
+if($ENV{RH_AOUT} STREQUAL "Embedded")
+	add_subdirectory(embedded)
+endif()
+
