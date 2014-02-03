@@ -13,7 +13,10 @@
 #define S5PROM_MAX_DISK_BUFFER_SIZE (128)
 
 // TODO: volume control!
-#define VOLUME 10
+#define VOLUME 10 // was 500 !?
+
+
+#define RESAMPLE_48_KHZ 1
 
 #include <stdlib.h>
 #include <ctype.h>
@@ -50,6 +53,9 @@ struct frame {
 	int32_t signal;
 	int32_t step;
 	uint8_t is_reset;
+
+	int8_t phase;
+	int8_t mixBuffer[4];
 };
 
 typedef struct frame frame_t;
@@ -377,8 +383,6 @@ static int _de_adpcm(rh_asmp_itf self, int samples, void * dst, int mixmode) {
 
 	int ret = 0;
 
-	samples &= (~1); // ASSUMING 16bit mono ( 2 samples per byte )
-
 	if(instance->frame.processed_samples >= instance->frame.nbsamples ) {
 
 		_adpcm_read_packet(self);
@@ -391,17 +395,23 @@ static int _de_adpcm(rh_asmp_itf self, int samples, void * dst, int mixmode) {
 			samples = samplesRemainingInFrame;
 	}
 
+//#if(RESAMPLE_48_KHZ)
+//	samples -= ( samples % 6 ); // ASSUMING 16bit mono ( 2 samples per byte, )
+//#else
+	samples &= (          ~1 ); // ASSUMING 16bit mono ( 2 samples per byte )
+//#endif
+
 	// ADPCM DECODE
 	{
 		uint32_t Position = 0;
-		uint32_t size = (samples/2); // ASSUMING 16bit mono
+		uint32_t srcBytes = (samples/2); // ASSUMING 16bit mono
 		int8_t * outBuffer = (int8_t *)(dst);
 		uint8_t * srcBuffer = instance->frame.buffer + (instance->frame.processed_samples / 2);
 
-		while(Position != size)
-		{
-			int8_t mixBuffer[4];
+		int8_t *mixBuffer = instance->frame.mixBuffer;
 
+		while(Position != srcBytes)
+		{
 			/* compute the new amplitude and update the current step */
 			uint8_t Data = srcBuffer[Position] >> 4;
 			instance->frame.signal += (instance->frame.step * diff_lookup[Data & 15]) / 8;
@@ -453,6 +463,7 @@ static int _de_adpcm(rh_asmp_itf self, int samples, void * dst, int mixmode) {
 				s1.field.lower = mixBuffer[3];
 				d0.value += s0.value / VOLUME;
 				d1.value += s1.value / VOLUME;
+
 				(*(int16_t*)(outBuffer+0)) += bswap_16(d0.value);
 				(*(int16_t*)(outBuffer+2)) += bswap_16(d1.value);
 #endif
@@ -536,7 +547,11 @@ static int _impl_samplesize(rh_asmp_itf pself) {
 
 static int _impl_samplerate(rh_asmp_itf pself) {
 
+#if(RESAMPLE_48_KHZ)
+	return 48000; // 48khz
+#else
 	return 16000; // 16khz
+#endif
 }
 
 static int _impl_channels(rh_asmp_itf pself) {

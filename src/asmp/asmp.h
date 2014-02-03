@@ -35,7 +35,11 @@ struct rh_asmp {
 	int         (*channels)        (rh_asmp_itf  self);
 	int         (*samplerate)      (rh_asmp_itf  self);
 	int         (*samplesize)      (rh_asmp_itf  self);
-	int         (*is_bigendian)    (rh_asmp_itf  self); /* OPTIONAL - NULL cTEST BEFORE USE! */
+	int         (*is_bigendian)    (rh_asmp_itf  self); /* OPTIONAL - NULL TEST BEFORE USE! */
+
+	/*** TODO:
+	 * optional get/set volume!
+	 */
 
 	int         (*on_output_event)(rh_asmp_itf  self, rh_output_event_enum_t ev); // CALLED BY THE AUDIO OUTPUT INTERFACE IMPLEMENTATION
 };

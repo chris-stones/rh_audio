@@ -597,14 +597,6 @@ static int _impl_setup(rh_aout_api_itf self) {
 #if !defined(DEBUG_DUMPFILE)
     	int ret = ioctl(device->fd,AUDIO_IOCTL_PREPARE,&device->driver);
     	if (ret) exception("AUDIO_IOCTL_PREPARE %s\n",strerror(errno));
-#endif
-
-//    	device->run = 1;
-    	device->volume = 500;
-//    	device->play_list_head = NULL;
-//    	SafeThreadMutexInit(&device->play_list_mutex);
-
-#if !defined(DEBUG_DUMPFILE)
     	ret = ioctl(device->fd,AUDIO_IOCTL_START);
     	if (ret) exception("AUDIO_IOCTL_START %s\n",strerror(errno));
 #endif

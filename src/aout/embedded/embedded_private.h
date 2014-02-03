@@ -67,7 +67,6 @@ typedef struct {
 
 typedef struct _audio_device {
 	int fd;
-	short volume;
 	audio_driver_t driver;
 	ssize_t dma_period_size;
 	audio_dma_period_t* dma_period_table;
