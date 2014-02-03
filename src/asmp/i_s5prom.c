@@ -16,7 +16,7 @@
 #define VOLUME 10 // was 500 !?
 
 
-#define RESAMPLE_48_KHZ 1
+#define RESAMPLE_48_KHZ 0
 
 #include <stdlib.h>
 #include <ctype.h>
@@ -54,7 +54,10 @@ struct frame {
 	int32_t step;
 	uint8_t is_reset;
 
+#if(RESAMPLE_48_KHZ)
 	int8_t phase;
+#endif
+
 	int8_t mixBuffer[4];
 };
 
@@ -110,14 +113,6 @@ static int _impl_on_output_event(rh_asmp_itf self, rh_output_event_enum_t ev) {
 
 	return e;
 }
-
-//static int _can_buffer_hold_entire_sample(rh_asmp_itf self) {
-//
-//	struct asmp_instance * instance = (struct asmp_instance *)self;
-//
-//	return instance->frame.buffersize >=
-//			(instance->sample_header.end - instance->sample_header.start);
-//}
 
 static int _read_from_asset(rh_asmp_itf self, size_t pos, size_t size, size_t nmemb, void * dst) {
 
@@ -295,7 +290,13 @@ static int _adpcm_read_packet(rh_asmp_itf self) {
 
 	size_t s = instance->sample_header.end - instance->sample_header.start;
 
-	if(instance->frame.nbsamples == (s * 2)) {
+#if(RESAMPLE_48_KHZ)
+	s *= 6;
+#else
+	s *= 2;
+#endif
+
+	if(instance->frame.nbsamples == s) {
 
 		// frame buffer holds entire sample, avoid the disk!
 		if( instance->frame.processed_samples >= instance->frame.nbsamples ) {
@@ -321,7 +322,11 @@ static int _adpcm_read_packet(rh_asmp_itf self) {
 			return err;
 		}
 
-		instance->frame.nbsamples = err * 2; // ASSUMING 16bit mono,
+#if(RESAMPLE_48_KHZ)
+	instance->frame.nbsamples = err * 6;
+#else
+	instance->frame.nbsamples = err * 2;
+#endif
 
 		return err;
 	}
@@ -339,6 +344,9 @@ static int _impl_reset(rh_asmp_itf self) {
 	// reset decoder state.
 	instance->frame.signal = 0;
 	instance->frame.step = 0x7f;
+#if(RESAMPLE_48_KHZ)
+	instance->frame.phase = 0;
+#endif
 
 	// pre-load first frame.
 	instance->frame.processed_samples = 0;
@@ -383,10 +391,8 @@ static int _de_adpcm(rh_asmp_itf self, int samples, void * dst, int mixmode) {
 
 	int ret = 0;
 
-	if(instance->frame.processed_samples >= instance->frame.nbsamples ) {
-
+	if(instance->frame.processed_samples >= instance->frame.nbsamples )
 		_adpcm_read_packet(self);
-	}
 
 	{
 		// ASSUMING 16bit mono
@@ -395,53 +401,69 @@ static int _de_adpcm(rh_asmp_itf self, int samples, void * dst, int mixmode) {
 			samples = samplesRemainingInFrame;
 	}
 
-//#if(RESAMPLE_48_KHZ)
-//	samples -= ( samples % 6 ); // ASSUMING 16bit mono ( 2 samples per byte, )
-//#else
-	samples &= (          ~1 ); // ASSUMING 16bit mono ( 2 samples per byte )
-//#endif
+	samples &= ( ~1 ); // ASSUMING 16bit mono ( 2 samples per byte )
 
 	// ADPCM DECODE
 	{
 		uint32_t Position = 0;
-		uint32_t srcBytes = (samples/2); // ASSUMING 16bit mono
+		 int32_t samplesRemaining = samples;
 		int8_t * outBuffer = (int8_t *)(dst);
-		uint8_t * srcBuffer = instance->frame.buffer + (instance->frame.processed_samples / 2);
+
+#if(RESAMPLE_48_KHZ)
+		uint8_t * srcBuffer = instance->frame.buffer +
+				(instance->frame.processed_samples / 6);
+#else
+		uint8_t * srcBuffer = instance->frame.buffer +
+				(instance->frame.processed_samples / 2);
+#endif
 
 		int8_t *mixBuffer = instance->frame.mixBuffer;
 
-		while(Position != srcBytes)
-		{
-			/* compute the new amplitude and update the current step */
-			uint8_t Data = srcBuffer[Position] >> 4;
-			instance->frame.signal += (instance->frame.step * diff_lookup[Data & 15]) / 8;
+		while(samplesRemaining >= 2) {
 
-			/* clamp to the maximum */
-			if (instance->frame.signal > 32767) instance->frame.signal = 32767; else if (instance->frame.signal < -32768) instance->frame.signal = -32768;
+#if(RESAMPLE_48_KHZ)
+			if(instance->frame.phase == 0)
+#endif
+			{
+				/* compute the new amplitude and update the current step */
+				uint8_t Data = srcBuffer[Position] >> 4;
+				instance->frame.signal += (instance->frame.step * diff_lookup[Data & 15]) / 8;
 
-			/* adjust the step size and clamp */
-			instance->frame.step = (instance->frame.step * index_scale[Data & 7]) >> 8;
+				/* clamp to the maximum */
+				if (instance->frame.signal > 32767) instance->frame.signal = 32767; else if (instance->frame.signal < -32768) instance->frame.signal = -32768;
 
-			if (instance->frame.step > 0x6000) instance->frame.step = 0x6000; else if (instance->frame.step < 0x7f) instance->frame.step = 0x7f;
+				/* adjust the step size and clamp */
+				instance->frame.step = (instance->frame.step * index_scale[Data & 7]) >> 8;
 
-			/* output to the buffer */
-			mixBuffer[0] = (int8_t)((instance->frame.signal >> 8) & 0xff);
-			mixBuffer[1] = (int8_t)(instance->frame.signal & 0xff);
-			//added part
-			Data = srcBuffer[Position] & 0x0F;
-			instance->frame.signal += (instance->frame.step * diff_lookup[Data & 15]) / 8;
+				if (instance->frame.step > 0x6000) instance->frame.step = 0x6000; else if (instance->frame.step < 0x7f) instance->frame.step = 0x7f;
 
-			/* clamp to the maximum */
-			if (instance->frame.signal > 32767) instance->frame.signal = 32767; else if (instance->frame.signal < -32768) instance->frame.signal = -32768;
+				/* output to the buffer */
+				mixBuffer[0] = (int8_t)((instance->frame.signal >> 8) & 0xff);
+				mixBuffer[1] = (int8_t)(instance->frame.signal & 0xff);
+				//added part
+				Data = srcBuffer[Position] & 0x0F;
+				instance->frame.signal += (instance->frame.step * diff_lookup[Data & 15]) / 8;
 
-			/* adjust the step size and clamp */
-			instance->frame.step = (instance->frame.step * index_scale[Data & 7]) >> 8;
+				/* clamp to the maximum */
+				if (instance->frame.signal > 32767) instance->frame.signal = 32767; else if (instance->frame.signal < -32768) instance->frame.signal = -32768;
 
-			if (instance->frame.step > 0x6000) instance->frame.step = 0x6000; else if (instance->frame.step < 0x7f) instance->frame.step = 0x7f;
+				/* adjust the step size and clamp */
+				instance->frame.step = (instance->frame.step * index_scale[Data & 7]) >> 8;
 
-			/* output to the buffer  */
-			mixBuffer[2] = (int8_t)((instance->frame.signal >> 8) & 0xff);
-			mixBuffer[3] = (int8_t)(instance->frame.signal & 0xff);
+				if (instance->frame.step > 0x6000) instance->frame.step = 0x6000; else if (instance->frame.step < 0x7f) instance->frame.step = 0x7f;
+
+				/* output to the buffer  */
+				mixBuffer[2] = (int8_t)((instance->frame.signal >> 8) & 0xff);
+				mixBuffer[3] = (int8_t)(instance->frame.signal & 0xff);
+
+				Position++;
+			}
+
+#if(RESAMPLE_48_KHZ)
+			instance->frame.phase++;
+			if(instance->frame.phase >= 3)
+				instance->frame.phase = 0;
+#endif
 
 			// audio-data is big-endian.
 
@@ -487,7 +509,7 @@ static int _de_adpcm(rh_asmp_itf self, int samples, void * dst, int mixmode) {
 			}
 
 			outBuffer+=4;
-			Position++;
+			samplesRemaining-=2;
 		}
 	}
 
