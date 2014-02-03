@@ -10,7 +10,10 @@
 
 // ADPCM - MUST BE A MULTIPLE OF 4! ( 1000 bytes == 125 milliseconds @ 16khz )
 //#define S5PROM_MAX_DISK_BUFFER_SIZE (2 * 1024 * 1024)
-#define S5PROM_MAX_DISK_BUFFER_SIZE (4)
+#define S5PROM_MAX_DISK_BUFFER_SIZE (128)
+
+// TODO: volume control!
+#define VOLUME 10
 
 #include <stdlib.h>
 #include <ctype.h>
@@ -345,7 +348,7 @@ static int _impl_reset(rh_asmp_itf self) {
 }
 
 typedef	union {
-	uint16_t value;
+	int16_t value;
 	struct {
 #if RH_IS_LITTLE_ENDIAN
 		uint8_t lower;
@@ -412,14 +415,8 @@ static int _de_adpcm(rh_asmp_itf self, int samples, void * dst, int mixmode) {
 			if (instance->frame.step > 0x6000) instance->frame.step = 0x6000; else if (instance->frame.step < 0x7f) instance->frame.step = 0x7f;
 
 			/* output to the buffer */
-//			if(RH_IS_LITTLE_ENDIAN) {
-//				mixBuffer[0] = (int8_t)(instance->frame.signal & 0xff);
-//				mixBuffer[1] = (int8_t)((instance->frame.signal >> 8) & 0xff);
-//			} else {
-				mixBuffer[0] = (int8_t)((instance->frame.signal >> 8) & 0xff);
-				mixBuffer[1] = (int8_t)(instance->frame.signal & 0xff);
-//			}
-
+			mixBuffer[0] = (int8_t)((instance->frame.signal >> 8) & 0xff);
+			mixBuffer[1] = (int8_t)(instance->frame.signal & 0xff);
 			//added part
 			Data = srcBuffer[Position] & 0x0F;
 			instance->frame.signal += (instance->frame.step * diff_lookup[Data & 15]) / 8;
@@ -433,22 +430,18 @@ static int _de_adpcm(rh_asmp_itf self, int samples, void * dst, int mixmode) {
 			if (instance->frame.step > 0x6000) instance->frame.step = 0x6000; else if (instance->frame.step < 0x7f) instance->frame.step = 0x7f;
 
 			/* output to the buffer  */
-//			if(RH_IS_LITTLE_ENDIAN) {
-//				mixBuffer[2] = (int8_t)(instance->frame.signal & 0xff);
-//				mixBuffer[3] = (int8_t)((instance->frame.signal >> 8) & 0xff);
-//			} else {
-				mixBuffer[2] = (int8_t)((instance->frame.signal >> 8) & 0xff);
-				mixBuffer[3] = (int8_t)(instance->frame.signal & 0xff);
-//			}
+			mixBuffer[2] = (int8_t)((instance->frame.signal >> 8) & 0xff);
+			mixBuffer[3] = (int8_t)(instance->frame.signal & 0xff);
 
 			// audio-data is big-endian.
 
 			if(mixmode) {
 
 #if RH_IS_BIG_ENDIAN
-				(*(int16_t*)(outBuffer+0)) += (*(int16_t*)mixBuffer+0);
-				(*(int16_t*)(outBuffer+2)) += (*(int16_t*)mixBuffer+2);
+				(*(int16_t*)(outBuffer+0)) += (*(int16_t*)mixBuffer+0) / VOLUME;
+				(*(int16_t*)(outBuffer+2)) += (*(int16_t*)mixBuffer+2) / VOLUME;
 #else
+		// switch to CPU endian-ness, volume adjust, mix, and convert back to big-endian.
 				audio_sample16_t d0,d1,s0,s1;
 				d0.field.upper = outBuffer[0];
 				d0.field.lower = outBuffer[1];
@@ -458,14 +451,28 @@ static int _de_adpcm(rh_asmp_itf self, int samples, void * dst, int mixmode) {
 				s0.field.lower = mixBuffer[1];
 				s1.field.upper = mixBuffer[2];
 				s1.field.lower = mixBuffer[3];
-				d0.value += s0.value;
-				d1.value += s1.value;
-				(*(int16_t*)(outBuffer+0)) = bswap_16(d0.value);
-				(*(int16_t*)(outBuffer+2)) = bswap_16(d1.value);
+				d0.value += s0.value / VOLUME;
+				d1.value += s1.value / VOLUME;
+				(*(int16_t*)(outBuffer+0)) += bswap_16(d0.value);
+				(*(int16_t*)(outBuffer+2)) += bswap_16(d1.value);
 #endif
 			}
 			else {
-				(*(int32_t*)outBuffer) = (*(int32_t*)mixBuffer);
+#if RH_IS_BIG_ENDIAN
+				(*(int16_t*)(outBuffer+0)) = (*(int16_t*)(mixBuffer+0)) / VOLUME;
+				(*(int16_t*)(outBuffer+2)) = (*(int16_t*)(mixBuffer+2)) / VOLUME;
+#else
+	// switch to CPU endian-ness, volume adjust and convert back to big-endian.
+
+				audio_sample16_t s0,s1;
+				s0.field.upper = mixBuffer[0];
+				s0.field.lower = mixBuffer[1];
+				s1.field.upper = mixBuffer[2];
+				s1.field.lower = mixBuffer[3];
+
+				(*(int16_t*)(outBuffer+0)) = bswap_16(s0.value / VOLUME);
+				(*(int16_t*)(outBuffer+2)) = bswap_16(s1.value / VOLUME);
+#endif
 			}
 
 			outBuffer+=4;
