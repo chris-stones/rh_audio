@@ -15,8 +15,7 @@
 // TODO: volume control!
 #define VOLUME 10 // was 500 !?
 
-
-#define RESAMPLE_48_KHZ 0
+#define RESAMPLE_48_KHZ 1
 
 #include <stdlib.h>
 #include <ctype.h>
@@ -34,6 +33,54 @@
 
 #include "asmp.h"
 
+#if defined(__BYTE_ORDER__) && (__BYTE_ORDER__ == __ORDER_BIG_ENDIAN__)
+#define RH_BIG_ENDIAN
+#endif
+
+#if defined(__BYTE_ORDER__) && (__BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__)
+#define RH_LITTLE_ENDIAN
+#endif
+
+//#undef RH_LITTLE_ENDIAN
+//#define RH_BIG_ENDIAN
+
+#if defined(RH_LITTLE_ENDIAN)
+	#define RH_IS_LITTLE_ENDIAN 1
+	#define RH_IS_BIG_ENDIAN 0
+	#define CPU_TO_BE_32(x) (bswap_32((x)))
+	#define BE_TO_CPU_32(x) (bswap_32((x)))
+	#define CPU_TO_LE_32(x) ((x))
+    #define LE_TO_CPU_32(x) ((x))
+	#define CPU_TO_BE_16(x) (bswap_16((x)))
+	#define BE_TO_CPU_16(x) (bswap_16((x)))
+	#define CPU_TO_LE_16(x) ((x))
+    #define LE_TO_CPU_16(x) ((x))
+	#define COPY_TWO_CPU16_TO_BE16(out, in)\
+	do {\
+		((uint16_t*)out)[0] = CPU_TO_BE_16(((uint16_t*)in)[0]);\
+		((uint16_t*)out)[1] = CPU_TO_BE_16(((uint16_t*)in)[1]);\
+	}while(0)
+#elif defined(RH_BIG_ENDIAN)
+	#define RH_IS_LITTLE_ENDIAN 0
+	#define RH_IS_BIG_ENDIAN 1
+	#define CPU_TO_BE_32(x) ((x))
+    #define BE_TO_CPU_32(x) ((x))
+	#define CPU_TO_LE_32(x) (bswap_32((x)))
+	#define LE_TO_CPU_32(x) (bswap_32((x)))
+	#define CPU_TO_BE_16(x) ((x))
+    #define BE_TO_CPU_16(x) ((x))
+	#define CPU_TO_LE_16(x) (bswap_16((x)))
+	#define LE_TO_CPU_16(x) (bswap_16((x)))
+	#define COPY_TWO_CPU16_TO_BE16(out, in)\
+		(*((uint32_t*)(out))) = (*((uint32_t*)(in)))
+#else
+	#error cannot determine endianness!
+#endif
+
+
+#define BE_MIX_CPU_16(be_out16, cpu_in16)\
+	be_out16 =  CPU_TO_BE_16( BE_TO_CPU_16(be_out16) + cpu_in16 )
+
 struct sample_header_struct {
 
 	short freq;
@@ -43,6 +90,19 @@ struct sample_header_struct {
 } __attribute__((packed));
 
 typedef struct sample_header_struct sample_header_t;
+
+typedef	union {
+	int16_t value;
+	struct {
+#if RH_IS_LITTLE_ENDIAN
+		uint8_t lower;
+		uint8_t upper;
+#else
+		uint8_t upper;
+		uint8_t lower;
+#endif
+	} field;
+} audio_sample16_t;
 
 struct frame {
 
@@ -54,11 +114,12 @@ struct frame {
 	int32_t step;
 	uint8_t is_reset;
 
+	audio_sample16_t s0; /* sample 0, store in-case of re-sample */
+	audio_sample16_t s1; /* sample 1, store in-case of re-sample */
+
 #if(RESAMPLE_48_KHZ)
 	int8_t phase;
 #endif
-
-	int8_t mixBuffer[4];
 };
 
 typedef struct frame frame_t;
@@ -83,24 +144,6 @@ struct asmp_instance {
 	frame_t 		frame;
 	pthread_mutex_t monitor;
 };
-
-#if defined(__BYTE_ORDER__) && (__BYTE_ORDER__ == __ORDER_BIG_ENDIAN__)
-#define RH_BIG_ENDIAN
-#endif
-
-#if defined(__BYTE_ORDER__) && (__BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__)
-#define RH_LITTLE_ENDIAN
-#endif
-
-#if defined(RH_LITTLE_ENDIAN)
-	#define RH_IS_LITTLE_ENDIAN 1
-	#define RH_IS_BIG_ENDIAN 0
-#elif defined(RH_BIG_ENDIAN)
-	#define RH_IS_LITTLE_ENDIAN 0
-	#define RH_IS_BIG_ENDIAN 1
-#else
-	#error cannot determine endianness!
-#endif
 
 static int _impl_on_output_event(rh_asmp_itf self, rh_output_event_enum_t ev) {
 
@@ -361,19 +404,6 @@ static int _impl_reset(rh_asmp_itf self) {
 	return 0;
 }
 
-typedef	union {
-	int16_t value;
-	struct {
-#if RH_IS_LITTLE_ENDIAN
-		uint8_t lower;
-		uint8_t upper;
-#else
-		uint8_t upper;
-		uint8_t lower;
-#endif
-	} field;
-} audio_sample16_t;
-
 static int _de_adpcm(rh_asmp_itf self, int samples, void * dst, int mixmode) {
 
 	struct asmp_instance * instance = (struct asmp_instance *)self;
@@ -417,7 +447,7 @@ static int _de_adpcm(rh_asmp_itf self, int samples, void * dst, int mixmode) {
 				(instance->frame.processed_samples / 2);
 #endif
 
-		int8_t *mixBuffer = instance->frame.mixBuffer;
+		frame_t * frame = &instance->frame;
 
 		while(samplesRemaining >= 2) {
 
@@ -438,8 +468,8 @@ static int _de_adpcm(rh_asmp_itf self, int samples, void * dst, int mixmode) {
 				if (instance->frame.step > 0x6000) instance->frame.step = 0x6000; else if (instance->frame.step < 0x7f) instance->frame.step = 0x7f;
 
 				/* output to the buffer */
-				mixBuffer[0] = (int8_t)((instance->frame.signal >> 8) & 0xff);
-				mixBuffer[1] = (int8_t)(instance->frame.signal & 0xff);
+				frame->s0.field.upper = (int8_t)((instance->frame.signal >> 8) & 0xff);
+				frame->s0.field.lower = (int8_t)(instance->frame.signal & 0xff);
 				//added part
 				Data = srcBuffer[Position] & 0x0F;
 				instance->frame.signal += (instance->frame.step * diff_lookup[Data & 15]) / 8;
@@ -453,10 +483,62 @@ static int _de_adpcm(rh_asmp_itf self, int samples, void * dst, int mixmode) {
 				if (instance->frame.step > 0x6000) instance->frame.step = 0x6000; else if (instance->frame.step < 0x7f) instance->frame.step = 0x7f;
 
 				/* output to the buffer  */
-				mixBuffer[2] = (int8_t)((instance->frame.signal >> 8) & 0xff);
-				mixBuffer[3] = (int8_t)(instance->frame.signal & 0xff);
+				frame->s1.field.upper = (int8_t)((instance->frame.signal >> 8) & 0xff);
+				frame->s1.field.lower = (int8_t)(instance->frame.signal & 0xff);
+
+				/* VOLUME! */
+				frame->s0.value /= VOLUME;
+				frame->s1.value /= VOLUME;
 
 				Position++;
+			}
+			// audio-data is big-endian.
+
+			if(mixmode) {
+#if(RESAMPLE_48_KHZ)
+				switch(frame->phase) {
+				case 0:
+					BE_MIX_CPU_16((*(int16_t*)(outBuffer+0)), frame->s0.value);
+					BE_MIX_CPU_16((*(int16_t*)(outBuffer+2)), frame->s0.value);
+					break;
+				case 1:
+					BE_MIX_CPU_16((*(int16_t*)(outBuffer+0)), frame->s0.value);
+					BE_MIX_CPU_16((*(int16_t*)(outBuffer+2)), frame->s1.value);
+					break;
+				default:
+				case 2:
+					BE_MIX_CPU_16((*(int16_t*)(outBuffer+0)), frame->s1.value);
+					BE_MIX_CPU_16((*(int16_t*)(outBuffer+2)), frame->s1.value);
+					break;
+				}
+#else
+				BE_MIX_CPU_16((*(int16_t*)(outBuffer+0)), frame->s0.value);
+				BE_MIX_CPU_16((*(int16_t*)(outBuffer+2)), frame->s1.value);
+#endif
+			}
+			else {
+#if(RESAMPLE_48_KHZ)
+				switch(frame->phase) {
+				case 0:
+					(*(int16_t*)(outBuffer+0)) =
+					(*(int16_t*)(outBuffer+2)) = CPU_TO_BE_16(frame->s0.value);
+					break;
+				case 1:
+//					(*(int16_t*)(outBuffer+0)) = CPU_TO_BE_16(frame->s0.value);
+//					(*(int16_t*)(outBuffer+2)) = CPU_TO_BE_16(frame->s1.value);
+					COPY_TWO_CPU16_TO_BE16(outBuffer, &(frame->s0.value));
+					break;
+				default:
+				case 2:
+					(*(int16_t*)(outBuffer+0)) =
+					(*(int16_t*)(outBuffer+2)) = CPU_TO_BE_16(frame->s1.value);
+					break;
+				}
+#else
+//				(*(int16_t*)(outBuffer+0)) = CPU_TO_BE_16(frame->s0.value);
+//				(*(int16_t*)(outBuffer+2)) = CPU_TO_BE_16(frame->s1.value);
+				COPY_TWO_CPU16_TO_BE16(outBuffer, &(frame->s0.value));
+#endif
 			}
 
 #if(RESAMPLE_48_KHZ)
@@ -464,50 +546,6 @@ static int _de_adpcm(rh_asmp_itf self, int samples, void * dst, int mixmode) {
 			if(instance->frame.phase >= 3)
 				instance->frame.phase = 0;
 #endif
-
-			// audio-data is big-endian.
-
-			if(mixmode) {
-
-#if RH_IS_BIG_ENDIAN
-				(*(int16_t*)(outBuffer+0)) += (*(int16_t*)mixBuffer+0) / VOLUME;
-				(*(int16_t*)(outBuffer+2)) += (*(int16_t*)mixBuffer+2) / VOLUME;
-#else
-		// switch to CPU endian-ness, volume adjust, mix, and convert back to big-endian.
-				audio_sample16_t d0,d1,s0,s1;
-				d0.field.upper = outBuffer[0];
-				d0.field.lower = outBuffer[1];
-				d1.field.upper = outBuffer[2];
-				d1.field.lower = outBuffer[3];
-				s0.field.upper = mixBuffer[0];
-				s0.field.lower = mixBuffer[1];
-				s1.field.upper = mixBuffer[2];
-				s1.field.lower = mixBuffer[3];
-				d0.value += s0.value / VOLUME;
-				d1.value += s1.value / VOLUME;
-
-				(*(int16_t*)(outBuffer+0)) += bswap_16(d0.value);
-				(*(int16_t*)(outBuffer+2)) += bswap_16(d1.value);
-#endif
-			}
-			else {
-#if RH_IS_BIG_ENDIAN
-				(*(int16_t*)(outBuffer+0)) = (*(int16_t*)(mixBuffer+0)) / VOLUME;
-				(*(int16_t*)(outBuffer+2)) = (*(int16_t*)(mixBuffer+2)) / VOLUME;
-#else
-	// switch to CPU endian-ness, volume adjust and convert back to big-endian.
-
-				audio_sample16_t s0,s1;
-				s0.field.upper = mixBuffer[0];
-				s0.field.lower = mixBuffer[1];
-				s1.field.upper = mixBuffer[2];
-				s1.field.lower = mixBuffer[3];
-
-				(*(int16_t*)(outBuffer+0)) = bswap_16(s0.value / VOLUME);
-				(*(int16_t*)(outBuffer+2)) = bswap_16(s1.value / VOLUME);
-#endif
-			}
-
 			outBuffer+=4;
 			samplesRemaining-=2;
 		}
