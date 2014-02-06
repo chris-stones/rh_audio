@@ -16,7 +16,9 @@
 #include "../../bucket.h"
 
 #define DEBUG_DUMPFILE "audiodump.s16_be"
-#define DEBUG_PRINTF(...) printf(__VA_ARGS__)
+
+//#define DEBUG_PRINTF(...) printf(__VA_ARGS__)
+  #define DEBUG_PRINTF(...) do{}while(0)
 
 struct embedded_api_instance {
 

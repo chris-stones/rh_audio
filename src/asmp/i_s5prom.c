@@ -10,12 +10,15 @@
 
 // ADPCM - MUST BE A MULTIPLE OF 4! ( 1000 bytes == 125 milliseconds @ 16khz )
 //#define S5PROM_MAX_DISK_BUFFER_SIZE (2 * 1024 * 1024)
-#define S5PROM_MAX_DISK_BUFFER_SIZE (128)
+#define S5PROM_MAX_DISK_BUFFER_SIZE (512)
+
+//#define DEBUG_PRINTF(...) printf(__VA_ARGS__)
+#define DEBUG_PRINTF(...) do{}while(0)
 
 // TODO: volume control!
 #define VOLUME 10 // was 500 !?
 
-#define RESAMPLE_48_KHZ 1
+#define RESAMPLE_48_KHZ 0
 
 #include <stdlib.h>
 #include <ctype.h>
@@ -435,19 +438,22 @@ static int _de_adpcm(rh_asmp_itf self, int samples, void * dst, int mixmode) {
 
 	// ADPCM DECODE
 	{
-		uint32_t Position = 0;
 		 int32_t samplesRemaining = samples;
 		int8_t * outBuffer = (int8_t *)(dst);
+
+		frame_t * frame = &instance->frame;
 
 #if(RESAMPLE_48_KHZ)
 		uint8_t * srcBuffer = instance->frame.buffer +
 				(instance->frame.processed_samples / 6);
+
+		uint32_t Position = (instance->frame.processed_samples % 6) ? 1 : 0;
+
 #else
 		uint8_t * srcBuffer = instance->frame.buffer +
 				(instance->frame.processed_samples / 2);
+		uint32_t Position = 0;
 #endif
-
-		frame_t * frame = &instance->frame;
 
 		while(samplesRemaining >= 2) {
 
@@ -457,6 +463,10 @@ static int _de_adpcm(rh_asmp_itf self, int samples, void * dst, int mixmode) {
 			{
 				/* compute the new amplitude and update the current step */
 				uint8_t Data = srcBuffer[Position] >> 4;
+
+//				DEBUG_PRINTF("Data 0x%x, basesrc=%p, srcBuffer=%p, Position = %d\n",srcBuffer[Position],instance->frame.buffer,srcBuffer,Position);
+				DEBUG_PRINTF("%8d: Data 0x%02x\n", (srcBuffer+Position)-instance->frame.buffer,  Data);
+
 				instance->frame.signal += (instance->frame.step * diff_lookup[Data & 15]) / 8;
 
 				/* clamp to the maximum */
@@ -490,6 +500,8 @@ static int _de_adpcm(rh_asmp_itf self, int samples, void * dst, int mixmode) {
 				frame->s0.value /= VOLUME;
 				frame->s1.value /= VOLUME;
 
+//				DEBUG_PRINTF("phase0: reading %08d,%08d\n",frame->s0.value,frame->s1.value);
+
 				Position++;
 			}
 			// audio-data is big-endian.
@@ -520,24 +532,27 @@ static int _de_adpcm(rh_asmp_itf self, int samples, void * dst, int mixmode) {
 #if(RESAMPLE_48_KHZ)
 				switch(frame->phase) {
 				case 0:
+//					DEBUG_PRINTF("phase0: writing %08d,%08d to %p\n",frame->s0.value,frame->s0.value,outBuffer);
 					(*(int16_t*)(outBuffer+0)) =
 					(*(int16_t*)(outBuffer+2)) = CPU_TO_BE_16(frame->s0.value);
 					break;
 				case 1:
-//					(*(int16_t*)(outBuffer+0)) = CPU_TO_BE_16(frame->s0.value);
-//					(*(int16_t*)(outBuffer+2)) = CPU_TO_BE_16(frame->s1.value);
-					COPY_TWO_CPU16_TO_BE16(outBuffer, &(frame->s0.value));
+//					DEBUG_PRINTF("phase1: writing %08d,%08d to %p\n",frame->s0.value,frame->s1.value,outBuffer);
+					(*(int16_t*)(outBuffer+0)) = CPU_TO_BE_16(frame->s0.value);
+					(*(int16_t*)(outBuffer+2)) = CPU_TO_BE_16(frame->s1.value);
+//					COPY_TWO_CPU16_TO_BE16(outBuffer, &(frame->s0.value));
 					break;
 				default:
 				case 2:
+//					DEBUG_PRINTF("phase2: writing %08d,%08d to %p\n",frame->s1.value,frame->s1.value,outBuffer);
 					(*(int16_t*)(outBuffer+0)) =
 					(*(int16_t*)(outBuffer+2)) = CPU_TO_BE_16(frame->s1.value);
 					break;
 				}
 #else
-//				(*(int16_t*)(outBuffer+0)) = CPU_TO_BE_16(frame->s0.value);
-//				(*(int16_t*)(outBuffer+2)) = CPU_TO_BE_16(frame->s1.value);
-				COPY_TWO_CPU16_TO_BE16(outBuffer, &(frame->s0.value));
+				(*(int16_t*)(outBuffer+0)) = CPU_TO_BE_16(frame->s0.value);
+				(*(int16_t*)(outBuffer+2)) = CPU_TO_BE_16(frame->s1.value);
+//				COPY_TWO_CPU16_TO_BE16(outBuffer, &(frame->s0.value));
 #endif
 			}
 
@@ -548,10 +563,12 @@ static int _de_adpcm(rh_asmp_itf self, int samples, void * dst, int mixmode) {
 #endif
 			outBuffer+=4;
 			samplesRemaining-=2;
+
+			instance->frame.processed_samples += 2;
 		}
 	}
 
-	instance->frame.processed_samples  += samples;
+//	instance->frame.processed_samples  += samples;
 
 	if(samples)
 		instance->frame.is_reset = 0;

@@ -70,7 +70,7 @@ int aout_alsa_hw_settings(rh_aout_itf self, snd_pcm_format_t format, unsigned in
     goto err;
 
   // Set buffer time
-  instance->buffertime = 3000;//300000;//600000;
+  instance->buffertime = 100000;//300000;//600000;
   if(snd_pcm_hw_params_set_buffer_time_near(instance->handle, instance->hwparams,&instance->buffertime,&instance->dir)<0)
     goto err;
 
