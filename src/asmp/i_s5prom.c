@@ -44,9 +44,6 @@
 #define RH_LITTLE_ENDIAN
 #endif
 
-//#undef RH_LITTLE_ENDIAN
-//#define RH_BIG_ENDIAN
-
 #if defined(RH_LITTLE_ENDIAN)
 	#define RH_IS_LITTLE_ENDIAN 1
 	#define RH_IS_BIG_ENDIAN 0
@@ -58,6 +55,10 @@
 	#define BE_TO_CPU_16(x) (bswap_16((x)))
 	#define CPU_TO_LE_16(x) ((x))
     #define LE_TO_CPU_16(x) ((x))
+	#define BE_TO_CPU_16_INPLANCE(x) do{ (x) = bswap_16((x)); }while(0)
+	#define BE_TO_CPU_32_INPLANCE(x) do{ (x) = bswap_32((x)); }while(0)
+	#define LE_TO_CPU_16_INPLANCE(x) do{                      }while(0)
+	#define LE_TO_CPU_32_INPLANCE(x) do{                      }while(0)
 	#define COPY_TWO_CPU16_TO_BE16(out, in)\
 	do {\
 		((uint16_t*)out)[0] = CPU_TO_BE_16(((uint16_t*)in)[0]);\
@@ -74,6 +75,10 @@
     #define BE_TO_CPU_16(x) ((x))
 	#define CPU_TO_LE_16(x) (bswap_16((x)))
 	#define LE_TO_CPU_16(x) (bswap_16((x)))
+	#define LE_TO_CPU_16_INPLANCE(x) do{ (x) = bswap_16((x)); }while(0)
+	#define LE_TO_CPU_32_INPLANCE(x) do{ (x) = bswap_32((x)); }while(0)
+	#define BE_TO_CPU_16_INPLANCE(x) do{                      }while(0)
+	#define BE_TO_CPU_32_INPLANCE(x) do{                      }while(0)
 	#define COPY_TWO_CPU16_TO_BE16(out, in)\
 		(*((uint32_t*)(out))) = (*((uint32_t*)(in)))
 #else
@@ -237,12 +242,9 @@ static int _impl_open(rh_asmp_itf self, const char * const fn) {
 			nsamples = 0;
 		}
 
-		if(RH_IS_LITTLE_ENDIAN)
-		{
-			instance->sample_header.freq  = bswap_16(instance->sample_header.freq);
-			instance->sample_header.start = bswap_32(instance->sample_header.start);
-			instance->sample_header.end   = bswap_32(instance->sample_header.end);
-		}
+		BE_TO_CPU_16_INPLANCE( instance->sample_header.freq );
+		BE_TO_CPU_32_INPLANCE( instance->sample_header.start );
+		BE_TO_CPU_32_INPLANCE( instance->sample_header.end );
 
 		instance->frame.buffersize = buffersize;
 		if(instance->frame.buffersize >= (instance->sample_header.end - instance->sample_header.start) )
@@ -564,11 +566,11 @@ static int _de_adpcm(rh_asmp_itf self, int samples, void * dst, int mixmode) {
 			outBuffer+=4;
 			samplesRemaining-=2;
 
-			instance->frame.processed_samples += 2;
+//			instance->frame.processed_samples += 2;
 		}
 	}
 
-//	instance->frame.processed_samples  += samples;
+	instance->frame.processed_samples  += samples;
 
 	if(samples)
 		instance->frame.is_reset = 0;
