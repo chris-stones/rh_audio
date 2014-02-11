@@ -33,8 +33,13 @@ static int main_promfile(int argc, char ** argv ) {
 	err = (*itf1)->openf( itf1, 0, RH_AUDIO_URL_FROM_FILEPTR( promfile, atoi(argv[3]) ) );
 	printf("%d == open()\n", err);
 	err = (*itf0)->play( itf0 );
-	err = (*itf1)->play( itf1 );
+	err = (*itf1)->loop( itf1 );
 	printf("%d == play()\n", err);
+
+	printf("looping - hit return to stop!\n");
+	getchar();
+	(*itf1)->stop(itf1);
+
 	err = (*itf0)->wait( itf0 );
 	err = (*itf1)->wait( itf1 );
 	printf("%d == wait()\n", err);
@@ -69,8 +74,13 @@ static int main_libesprom(int argc, char ** argv ) {
 	err = (*itf1)->openf( itf1, 0, RH_AUDIO_URL_PROM_LIBESPROM( prom, atoi(argv[3]) ) );
 	printf("%d == open()\n", err);
 	err = (*itf0)->play( itf0 );
-	err = (*itf1)->play( itf1 );
+	err = (*itf1)->loop( itf1 );
 	printf("%d == play()\n", err);
+
+	printf("looping - hit return to stop!\n");
+	getchar();
+	(*itf1)->stop(itf1);
+
 	err = (*itf0)->wait( itf0 );
 	err = (*itf1)->wait( itf1 );
 	printf("%d == wait()\n", err);
