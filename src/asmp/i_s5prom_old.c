@@ -8,7 +8,6 @@
 #define WITH_RH_RAW_LOADER 0
 #endif
 
-
 // ADPCM - MUST BE A MULTIPLE OF 4! ( 1000 bytes == 125 milliseconds @ 16khz )
 //#define S5PROM_MAX_DISK_BUFFER_SIZE (2 * 1024 * 1024)
 #define S5PROM_MAX_DISK_BUFFER_SIZE (512)
@@ -33,11 +32,6 @@
 
 #if WITH_RH_RAW_LOADER
 #include<rh_raw_loader.h>
-#endif
-
-#define WITH_LIBESPROM 1
-#if defined(WITH_LIBESPROM)
-#include <libesprom.h>
 #endif
 
 #include "asmp.h"
@@ -122,11 +116,6 @@ struct frame {
 
 	uint8_t * buffer;
 	size_t buffersize;
-
-#if WITH_LIBESPROM
-	esprom_sample_handle asset_libesprom;
-#endif
-
 	size_t nbsamples;
 	size_t processed_samples;
 	int32_t signal;
@@ -194,10 +183,6 @@ static int _read_from_asset(rh_asmp_itf self, size_t pos, size_t size, size_t nm
 			e = rh_rawpak_read(dst, size, nmemb, instance->asset_pak );
 	}
 #endif
-#if WITH_LIBESPROM
-	else if( instance->frame.asset_libesprom ) {
-	}
-#endif
 
 	return e;
 }
@@ -206,19 +191,18 @@ static int _impl_open(rh_asmp_itf self, const char * const fn) {
 
   struct asmp_instance * instance = (struct asmp_instance *)self;
 
+
   const int buffersize = S5PROM_MAX_DISK_BUFFER_SIZE;
 
   instance->frame.buffersize = 0;
   instance->frame.buffer = NULL;
   instance->frame.step = 0x7f;
 
+//if(( instance->frame.buffer = malloc(instance->frame.buffersize) ))
   {
 	  	FILE * file         = NULL;
 #if WITH_RH_RAW_LOADER
 	  	rh_rawpak_ctx pak   = NULL;
-#endif
-#if WITH_LIBESPROM
-	  	esprom_handle esprom = NULL;
 #endif
 	  	int    sample_index = 0;
 	  	short  nsamples     = 0;
@@ -227,9 +211,6 @@ static int _impl_open(rh_asmp_itf self, const char * const fn) {
 	  		  (sscanf(fn,"prom_fileptr://%p/%d" ,&file,&sample_index) != 2)
 #if WITH_RH_RAW_LOADER
 	  	   && (sscanf(fn,"prom_rawpak://%p/%d",&pak, &sample_index) != 2)
-#endif
-#if WITH_LIBESPROM
-	  	   && (sscanf(fn,"prom_libesprom://%p/%d",&esprom, &sample_index) != 2)
 #endif
 	  	  )
 	  	{
@@ -241,20 +222,6 @@ static int _impl_open(rh_asmp_itf self, const char * const fn) {
 		instance->asset_pak  = pak;
 #endif
 		instance->sample_index = sample_index;
-
-#if WITH_LIBESPROM
-		if(esprom) {
-			if(esprom_sample_alloc( esprom, sample_index, &instance->frame.asset_libesprom ) != 0)
-				return -1;
-
-			instance->sample_header.end = esprom_sample_size(instance->frame.asset_libesprom) - 1;
-
-			// reset all state, and pre-load first packet.
-			instance->interface->reset(self);
-
-			return 0;
-		}
-#endif
 
 		if( _read_from_asset(self, 14, 2, 1, &nsamples) != 1 )
 			nsamples = 0;
@@ -342,13 +309,13 @@ static int _seek(rh_asmp_itf self, long offset, int whence) {
 static inline int _read(void* data, size_t size, size_t nmemb, rh_asmp_itf self) {
 
 	struct asmp_instance * instance = (struct asmp_instance *)self;
-	int err;
 
-	err = _read_from_asset(
-		self,
-		instance->readpos + instance->sample_header.start,
-		size,nmemb,
-		data);
+	int err =
+		_read_from_asset(
+			self,
+			instance->readpos + instance->sample_header.start,
+			size,nmemb,
+			data);
 
 	if( err < 0)
 		return err;
@@ -377,11 +344,7 @@ static int _adpcm_read_packet(rh_asmp_itf self) {
 	s *= 2;
 #endif
 
-	DEBUG_PRINTF("_adpcm_read_packet: samplesize = %zu\n", s);
-
 	if(instance->frame.nbsamples == s) {
-
-		DEBUG_PRINTF("_adpcm_read_packet: instance->frame.nbsamples == s \n");
 
 		// frame buffer holds entire sample, avoid the disk!
 		if( instance->frame.processed_samples >= instance->frame.nbsamples ) {
@@ -394,39 +357,6 @@ static int _adpcm_read_packet(rh_asmp_itf self) {
 		}
 		return err;
 	}
-#if WITH_LIBESPROM
-	else if( instance->frame.asset_libesprom ) {
-
-		int err;
-
-		instance->frame.nbsamples = 0;
-		instance->frame.processed_samples = 0;
-
-		err = esprom_sample_getbuffer(
-				 instance->frame.asset_libesprom,
-				(void**)&instance->frame.buffer,
-				&instance->frame.buffersize);
-
-		if( (err < 0) || ( instance->frame.buffersize <= 0 ) ) {
-
-			DEBUG_PRINTF("_adpcm_read_packet: at end! %d %zu\n",err,instance->frame.buffersize);
-			instance->ate = 1;
-			return err;
-		}
-
-		esprom_sample_seek( instance->frame.asset_libesprom, instance->frame.buffersize, SEEK_CUR );
-
-		#if(RESAMPLE_48_KHZ)
-			instance->frame.nbsamples = instance->frame.buffersize * 6;
-		#else
-			instance->frame.nbsamples = instance->frame.buffersize * 2;
-		#endif
-
-		DEBUG_PRINTF("_adpcm_read_packet: %p %zu (samples %zu)\n", instance->frame.buffer, instance->frame.buffersize, instance->frame.nbsamples, instance->frame.buffersize);
-
-		return instance->frame.buffersize;
-	}
-#endif
 	else {
 
 		instance->frame.nbsamples = 0;
@@ -458,10 +388,6 @@ static int _impl_reset(rh_asmp_itf self) {
 		return 0;
 
 	_seek(self, 0, SEEK_SET);
-
-#if WITH_LIBESPROM
-	esprom_sample_seek( instance->frame.asset_libesprom ,0, SEEK_SET);
-#endif
 
 	// reset decoder state.
 	instance->frame.signal = 0;
@@ -541,7 +467,7 @@ static int _de_adpcm(rh_asmp_itf self, int samples, void * dst, int mixmode) {
 				uint8_t Data = srcBuffer[Position] >> 4;
 
 //				DEBUG_PRINTF("Data 0x%x, basesrc=%p, srcBuffer=%p, Position = %d\n",srcBuffer[Position],instance->frame.buffer,srcBuffer,Position);
-//				DEBUG_PRINTF("%8d: Data 0x%02x\n", (srcBuffer+Position)-instance->frame.buffer,  Data);
+				DEBUG_PRINTF("%8d: Data 0x%02x\n", (srcBuffer+Position)-instance->frame.buffer,  Data);
 
 				instance->frame.signal += (instance->frame.step * diff_lookup[Data & 15]) / 8;
 
@@ -683,12 +609,6 @@ static int _impl_close(rh_asmp_itf *pself) {
 	  pthread_mutex_unlock(&instance->monitor);
 
 	  if(ref == 0) {
-
-#if WITH_LIBESPROM
-		esprom_sample_free( instance->frame.asset_libesprom );
-		if(instance->frame.asset_libesprom)
-			instance->frame.buffer = NULL; // HACK: not allocated by this module!
-#endif
 		free( instance->interface    );
 		free( instance->frame.buffer );
 		free( instance );
