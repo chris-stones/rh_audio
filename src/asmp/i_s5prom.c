@@ -22,8 +22,6 @@
 #include <stdarg.h>
 #include <linux/limits.h>
 
-#define WITH_LIBESPROM 1
-
 #include <libesprom.h>
 
 #include "asmp.h"
@@ -37,40 +35,16 @@
 #endif
 
 #if defined(RH_LITTLE_ENDIAN)
-	#define RH_IS_LITTLE_ENDIAN 1
-	#define RH_IS_BIG_ENDIAN 0
-	#define CPU_TO_BE_32(x) (bswap_32((x)))
-	#define BE_TO_CPU_32(x) (bswap_32((x)))
-	#define CPU_TO_LE_32(x) ((x))
-    #define LE_TO_CPU_32(x) ((x))
 	#define CPU_TO_BE_16(x) (bswap_16((x)))
 	#define BE_TO_CPU_16(x) (bswap_16((x)))
-	#define CPU_TO_LE_16(x) ((x))
-    #define LE_TO_CPU_16(x) ((x))
-	#define BE_TO_CPU_16_INPLANCE(x) do{ (x) = bswap_16((x)); }while(0)
-	#define BE_TO_CPU_32_INPLANCE(x) do{ (x) = bswap_32((x)); }while(0)
-	#define LE_TO_CPU_16_INPLANCE(x) do{                      }while(0)
-	#define LE_TO_CPU_32_INPLANCE(x) do{                      }while(0)
 	#define COPY_TWO_CPU16_TO_BE16(out, in)\
 	do {\
 		((uint16_t*)out)[0] = CPU_TO_BE_16(((uint16_t*)in)[0]);\
 		((uint16_t*)out)[1] = CPU_TO_BE_16(((uint16_t*)in)[1]);\
 	}while(0)
 #elif defined(RH_BIG_ENDIAN)
-	#define RH_IS_LITTLE_ENDIAN 0
-	#define RH_IS_BIG_ENDIAN 1
-	#define CPU_TO_BE_32(x) ((x))
-    #define BE_TO_CPU_32(x) ((x))
-	#define CPU_TO_LE_32(x) (bswap_32((x)))
-	#define LE_TO_CPU_32(x) (bswap_32((x)))
 	#define CPU_TO_BE_16(x) ((x))
     #define BE_TO_CPU_16(x) ((x))
-	#define CPU_TO_LE_16(x) (bswap_16((x)))
-	#define LE_TO_CPU_16(x) (bswap_16((x)))
-	#define LE_TO_CPU_16_INPLANCE(x) do{ (x) = bswap_16((x)); }while(0)
-	#define LE_TO_CPU_32_INPLANCE(x) do{ (x) = bswap_32((x)); }while(0)
-	#define BE_TO_CPU_16_INPLANCE(x) do{                      }while(0)
-	#define BE_TO_CPU_32_INPLANCE(x) do{                      }while(0)
 	#define COPY_TWO_CPU16_TO_BE16(out, in)\
 		(*((uint32_t*)(out))) = (*((uint32_t*)(in)))
 #else
@@ -86,7 +60,7 @@ typedef struct sample_header_struct sample_header_t;
 typedef	union {
 	int16_t value;
 	struct {
-#if RH_IS_LITTLE_ENDIAN
+#if defined(RH_LITTLE_ENDIAN)
 		uint8_t lower;
 		uint8_t upper;
 #else
@@ -297,12 +271,11 @@ static int _de_adpcm(rh_asmp_itf self, int samples, void * dst, int mixmode) {
 		uint8_t * srcBuffer = instance->frame.buffer +
 				(instance->frame.processed_samples / 6);
 
-		uint32_t Position = (instance->frame.processed_samples % 6) ? 1 : 0;
-
+		if( instance->frame.processed_samples % 6 )
+			++srcBuffer;
 #else
 		uint8_t * srcBuffer = instance->frame.buffer +
 				(instance->frame.processed_samples / 2);
-		uint32_t Position = 0;
 #endif
 
 		while(samplesRemaining >= 2) {
@@ -311,48 +284,62 @@ static int _de_adpcm(rh_asmp_itf self, int samples, void * dst, int mixmode) {
 			if(instance->frame.phase == 0)
 #endif
 			{
+				uint8_t srcData = *srcBuffer;
+
 				/* compute the new amplitude and update the current step */
-				uint8_t Data = srcBuffer[Position] >> 4;
+				uint8_t Data = srcData >> 4;
 
-//				DEBUG_PRINTF("Data 0x%x, basesrc=%p, srcBuffer=%p, Position = %d\n",srcBuffer[Position],instance->frame.buffer,srcBuffer,Position);
-//				DEBUG_PRINTF("%8d: Data 0x%02x\n", (srcBuffer+Position)-instance->frame.buffer,  Data);
-
-				instance->frame.signal += (instance->frame.step * diff_lookup[Data & 15]) / 8;
+				instance->frame.signal +=
+						(instance->frame.step * diff_lookup[Data & 15]) / 8;
 
 				/* clamp to the maximum */
-				if (instance->frame.signal > 32767) instance->frame.signal = 32767; else if (instance->frame.signal < -32768) instance->frame.signal = -32768;
+				if (instance->frame.signal > 32767)
+					instance->frame.signal = 32767;
+				else if (instance->frame.signal < -32768)
+					instance->frame.signal = -32768;
 
 				/* adjust the step size and clamp */
-				instance->frame.step = (instance->frame.step * index_scale[Data & 7]) >> 8;
+				instance->frame.step =
+						(instance->frame.step * index_scale[Data & 7]) >> 8;
 
-				if (instance->frame.step > 0x6000) instance->frame.step = 0x6000; else if (instance->frame.step < 0x7f) instance->frame.step = 0x7f;
+				if (instance->frame.step > 0x6000)
+					instance->frame.step = 0x6000;
+				else if (instance->frame.step < 0x7f)
+					instance->frame.step = 0x7f;
 
 				/* output to the buffer */
 				frame->s0.field.upper = (int8_t)((instance->frame.signal >> 8) & 0xff);
-				frame->s0.field.lower = (int8_t)(instance->frame.signal & 0xff);
+				frame->s0.field.lower = (int8_t)( instance->frame.signal       & 0xff);
+
 				//added part
-				Data = srcBuffer[Position] & 0x0F;
-				instance->frame.signal += (instance->frame.step * diff_lookup[Data & 15]) / 8;
+				Data = srcData & 0x0F;
+				instance->frame.signal +=
+						(instance->frame.step * diff_lookup[Data & 15]) / 8;
 
 				/* clamp to the maximum */
-				if (instance->frame.signal > 32767) instance->frame.signal = 32767; else if (instance->frame.signal < -32768) instance->frame.signal = -32768;
+				if (instance->frame.signal > 32767)
+					instance->frame.signal = 32767;
+				else if (instance->frame.signal < -32768)
+					instance->frame.signal = -32768;
 
 				/* adjust the step size and clamp */
-				instance->frame.step = (instance->frame.step * index_scale[Data & 7]) >> 8;
+				instance->frame.step =
+						(instance->frame.step * index_scale[Data & 7]) >> 8;
 
-				if (instance->frame.step > 0x6000) instance->frame.step = 0x6000; else if (instance->frame.step < 0x7f) instance->frame.step = 0x7f;
+				if (instance->frame.step > 0x6000)
+					instance->frame.step = 0x6000;
+				else if (instance->frame.step < 0x7f)
+					instance->frame.step = 0x7f;
 
 				/* output to the buffer  */
 				frame->s1.field.upper = (int8_t)((instance->frame.signal >> 8) & 0xff);
-				frame->s1.field.lower = (int8_t)(instance->frame.signal & 0xff);
+				frame->s1.field.lower = (int8_t)( instance->frame.signal       & 0xff);
 
 				/* VOLUME! */
 				frame->s0.value /= VOLUME;
 				frame->s1.value /= VOLUME;
 
-//				DEBUG_PRINTF("phase0: reading %08d,%08d\n",frame->s0.value,frame->s1.value);
-
-				Position++;
+				++srcBuffer;
 			}
 			// audio-data is big-endian.
 
@@ -388,9 +375,9 @@ static int _de_adpcm(rh_asmp_itf self, int samples, void * dst, int mixmode) {
 					break;
 				case 1:
 //					DEBUG_PRINTF("phase1: writing %08d,%08d to %p\n",frame->s0.value,frame->s1.value,outBuffer);
-					(*(int16_t*)(outBuffer+0)) = CPU_TO_BE_16(frame->s0.value);
-					(*(int16_t*)(outBuffer+2)) = CPU_TO_BE_16(frame->s1.value);
-//					COPY_TWO_CPU16_TO_BE16(outBuffer, &(frame->s0.value));
+//					(*(int16_t*)(outBuffer+0)) = CPU_TO_BE_16(frame->s0.value);
+//					(*(int16_t*)(outBuffer+2)) = CPU_TO_BE_16(frame->s1.value);
+					COPY_TWO_CPU16_TO_BE16(outBuffer, &(frame->s0.value));
 					break;
 				default:
 				case 2:
@@ -400,9 +387,9 @@ static int _de_adpcm(rh_asmp_itf self, int samples, void * dst, int mixmode) {
 					break;
 				}
 #else
-				(*(int16_t*)(outBuffer+0)) = CPU_TO_BE_16(frame->s0.value);
-				(*(int16_t*)(outBuffer+2)) = CPU_TO_BE_16(frame->s1.value);
-//				COPY_TWO_CPU16_TO_BE16(outBuffer, &(frame->s0.value));
+//				(*(int16_t*)(outBuffer+0)) = CPU_TO_BE_16(frame->s0.value);
+//				(*(int16_t*)(outBuffer+2)) = CPU_TO_BE_16(frame->s1.value);
+				COPY_TWO_CPU16_TO_BE16(outBuffer, &(frame->s0.value));
 #endif
 			}
 
@@ -413,8 +400,6 @@ static int _de_adpcm(rh_asmp_itf self, int samples, void * dst, int mixmode) {
 #endif
 			outBuffer+=4;
 			samplesRemaining-=2;
-
-//			instance->frame.processed_samples += 2;
 		}
 	}
 
