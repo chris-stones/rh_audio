@@ -15,7 +15,7 @@
 #include<unistd.h>
 #include "rh_audio.h"
 
-static int main_promfile(int argc, char ** argv ) {
+int main_promfile(int argc, char ** argv ) {
 
 	int err = 0;
 
@@ -54,7 +54,7 @@ static int main_promfile(int argc, char ** argv ) {
 	return 0;
 }
 
-static int main_libesprom(int argc, char ** argv ) {
+int main_libesprom(int argc, char ** argv ) {
 
 	int err = 0;
 

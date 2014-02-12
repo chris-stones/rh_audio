@@ -491,7 +491,6 @@ static int _impl_setup(rh_aout_api_itf self) {
 
     pthread_detach( instance->thread );
 
-good:
     return 0;
 
 bad:
@@ -550,8 +549,6 @@ static int _impl_play(rh_aout_api_itf self, rh_asmp_itf sample) {
 
     int e = -1;
 
-    struct alsa_api_instance * instance = (struct alsa_api_instance *)self;
-
     const struct io_command_struct cmd = { PLAY_COMMAND, sample };
 
     if( sample ) {
@@ -567,8 +564,6 @@ static int _impl_play(rh_aout_api_itf self, rh_asmp_itf sample) {
 static int _impl_loop(rh_aout_api_itf self, rh_asmp_itf sample) {
 
     int e = -1;
-
-    struct alsa_api_instance * instance = (struct alsa_api_instance *)self;
 
     const struct io_command_struct cmd = { LOOP_COMMAND, sample };
 
@@ -586,8 +581,6 @@ static int _impl_stop(rh_aout_api_itf self, rh_asmp_itf sample) {
 
     int e = -1;
 
-    struct alsa_api_instance * instance = (struct alsa_api_instance *)self;
-
     const struct io_command_struct cmd = { STOP_COMMAND, sample };
 
     if( sample ) {
@@ -603,8 +596,6 @@ static int _impl_stop(rh_aout_api_itf self, rh_asmp_itf sample) {
 static int _impl_sync(rh_aout_api_itf self, rh_asmp_itf sample) {
 
     int e = -1;
-
-    struct alsa_api_instance * instance = (struct alsa_api_instance *)self;
 
     const struct io_command_struct cmd = { SYNC_COMMAND, sample };
 
@@ -635,7 +626,6 @@ int rh_aout_create_api( rh_aout_api_itf * itf ) {
     interface->stop     = &_impl_stop;
     interface->sync     = &_impl_sync;
 
-good:
     *itf = (rh_aout_api_itf)instance;
     return 0;
 

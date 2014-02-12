@@ -6,8 +6,6 @@ int aout_alsa_set_sample(rh_aout_itf self, rh_asmp_itf sample) {
 
 	struct aout_instance * instance = (struct aout_instance *)self;
 
-	int i;
-
 	// update old samples reference counter.
 	if(instance->audio_sample)
 		(*instance->audio_sample)->close(&instance->audio_sample);

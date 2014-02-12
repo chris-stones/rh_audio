@@ -137,8 +137,6 @@ static int _on_output_event(void * _self, rh_output_event_enum_t ev) {
 
 	rh_audio_itf self = (rh_audio_itf)_self;
 
-	struct audio_instance * instance = (struct audio_instance *)self;
-
 	switch(ev) {
 		case RH_ASMP_OUTPUT_EVENT_STARTED:
 			_set_is_playing(self, 1);
@@ -193,7 +191,6 @@ static int _impl_open(rh_audio_itf self, const char * source, int flags) {
 		}
 	}
 
-good:
 	{
 		struct audio_instance * instance = (struct audio_instance *)self;
 		instance->source = _src;
@@ -359,7 +356,6 @@ int rh_audio_create( rh_audio_itf * itf ) {
 		interface->wait         = &_impl_wait;
 		interface->is_playing   = &_impl_is_playing;
 
-good:
 		*itf = (rh_audio_itf)instance;
 		return 0;
 bad:

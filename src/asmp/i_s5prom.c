@@ -130,7 +130,6 @@ static int _impl_open(rh_asmp_itf self, const char * const fn) {
   {
 	  	esprom_handle esprom = NULL;
 	  	int    sample_index = 0;
-	  	short  nsamples     = 0;
 
 	  	if((sscanf(fn,"prom_libesprom://%p/%d",&esprom, &sample_index) != 2))
 			return -1;
@@ -245,8 +244,6 @@ static int _de_adpcm(rh_asmp_itf self, int samples, void * dst, int mixmode) {
 		0x0e6,0x0e6,0x0e6,0x0e6,0x133,0x199,0x200,0x266,
 		0x0e6,0x0e6,0x0e6,0x0e6,0x133,0x199,0x200,0x266
 	};
-
-	int ret = 0;
 
 	if(instance->frame.processed_samples >= instance->frame.nbsamples )
 		_adpcm_read_packet(self);

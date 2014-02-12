@@ -185,6 +185,8 @@ static int _impl_open(rh_asmp_itf self, const char * const fn) {
     instance->samplesize	= 2;
 
     switch(instance->pCodecCtx->sample_fmt) {
+    default:
+	break;
     case AV_SAMPLE_FMT_U8:          ///< unsigned 8 bits
     case AV_SAMPLE_FMT_U8P:         ///< unsigned 8 bits, planar
     	instance->samplesize	= 1;
@@ -273,8 +275,6 @@ static int _ff_read_packet(rh_asmp_itf self) {
 static int _impl_read(rh_asmp_itf self, int samples, void * dst) {
 
 	struct asmp_instance * instance = (struct asmp_instance *)self;
-
-	int ret = 0;
 
 	if(instance->processedSamples >= instance->pFrame->nb_samples) {
 

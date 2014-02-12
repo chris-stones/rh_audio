@@ -63,7 +63,6 @@ err2:
   free(instance->hwparams);
   snd_pcm_close(instance->handle);
 err1:
-err0:
   return -1;
 }
 
