@@ -179,6 +179,8 @@ static int _adpcm_read_packet(rh_asmp_itf self) {
 	instance->frame.nbsamples = 0;
 	instance->frame.processed_samples = 0;
 
+	//TODO: need to call esprom_sample_releasebuffer()
+
 	err = esprom_sample_getbuffer(
 			 instance->frame.asset_libesprom,
 			(void**)&instance->frame.buffer,
@@ -189,8 +191,6 @@ static int _adpcm_read_packet(rh_asmp_itf self) {
 		instance->ate = 1;
 		return err;
 	}
-
-	esprom_sample_seek( instance->frame.asset_libesprom, instance->frame.buffersize, SEEK_CUR );
 
 	#if(RESAMPLE_48_KHZ)
 		instance->frame.nbsamples = instance->frame.buffersize * 6;
@@ -208,7 +208,7 @@ static int _impl_reset(rh_asmp_itf self) {
 	if(instance->frame.is_reset)
 		return 0;
 
-	esprom_sample_seek( instance->frame.asset_libesprom ,0, SEEK_SET);
+	esprom_sample_rewind( instance->frame.asset_libesprom );
 
 	// reset decoder state.
 	instance->frame.signal = 0;
