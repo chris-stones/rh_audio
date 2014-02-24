@@ -27,6 +27,8 @@ int rh_audio_setup_api() {
 		}
 	}
 
+	api_interface = NULL;
+
 	return -1;
 }
 
@@ -324,6 +326,9 @@ static int _impl_wait(rh_audio_itf self) {
 }
 
 int rh_audio_create( rh_audio_itf * itf ) {
+
+	if(!api_interface)
+		return -1; // user failed to test setup_api return code.
 
 	{
 		struct audio_instance * instance  = calloc(1, sizeof( struct audio_instance ) );
