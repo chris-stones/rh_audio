@@ -17,17 +17,18 @@ namespace rh {
 		class OpenException     : public std::exception {public: const char * what() const throw() { return "AudioSample::OpenException";     } };
 		class SetupApiException : public std::exception {public: const char * what() const throw() { return "AudioSample::SetupApiException"; } };
 
-		AudioSample(int flags, const char * source)
-			:	audio_itf(NULL)
-		{
-			__addref();
-
-			if( rh_audio_create(&audio_itf) != 0 )
-				throw OpenException();
-
-			if( (*audio_itf)->open(audio_itf, source, flags) != 0 )
-				throw OpenException();
-		}
+//	OOPS: ambiguous!
+//		AudioSample(int flags, const char * source)
+//			:	audio_itf(NULL)
+//		{
+//			__addref();
+//
+//			if( rh_audio_create(&audio_itf) != 0 )
+//				throw OpenException();
+//
+//			if( (*audio_itf)->open(audio_itf, source, flags) != 0 )
+//				throw OpenException();
+//		}
 
 		AudioSample(int flags, const char * format, ...)
 					:	audio_itf(NULL)
