@@ -3,16 +3,19 @@
  * Read in audio-data through FFMPEG.
  */
 
+#define __SUPPORT_READING_FROM_ANDROID_APK__ 0
+#define __SUPPORT_READING_FROM_FILESYSTEM__  1
+#define __SUPPORT_READING_FROM_RAWPAK__      0
+
+#if defined(HAVE_RH_RAW_LOADER_H) && (__SUPPORT_READING_FROM_RAWPAK__)
 #include<rh_raw_loader.h>
+#endif
 
 #include<stdlib.h>
 #include<stdio.h>
 #include<pthread.h>
 #include<stdarg.h>
 #include<linux/limits.h>
-
-#define __SUPPORT_READING_FROM_ANDROID_APK__ 0
-#define __SUPPORT_READING_FROM_FILESYSTEM__  0
 
 #if defined(__ANDROID__) && (__SUPPORT_READING_FROM_ANDROID_APK__)
 	#include<android/asset_manager.h>
@@ -22,15 +25,15 @@
 
 /*** INCLUDE FFMPEG ***************/
 #ifndef UINT64_C
-#define UINT64_C(c) (c ## ULL)
+  #define UINT64_C(c) (c ## ULL)
 #endif
 #ifdef __cplusplus
-extern "C" {
+  extern "C" {
 #endif
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
 #ifdef __cplusplus
-} // extern "C" {
+  } // extern "C" {
 #endif
 /**********************************/
 
@@ -93,7 +96,9 @@ static int _impl_open(rh_asmp_itf self, const char * const fn) {
 	}
 
 	{
-		if(strncmp("ffmpeg_rawpak://",fn,16)==0) {
+		if(0) {}
+#if (__SUPPORT_READING_FROM_RAWPAK__)
+		else if(strncmp("ffmpeg_rawpak://",fn,16)==0) {
 
 			void * p = NULL;
 
@@ -107,6 +112,7 @@ static int _impl_open(rh_asmp_itf self, const char * const fn) {
 				return -1;
 			}
 		}
+#endif
 #if defined(__ANDROID__) && (__SUPPORT_READING_FROM_ANDROID_APK__)
 		else if(strncmp("apk://",fn,6) == 0) {
 
@@ -184,6 +190,8 @@ static int _impl_open(rh_asmp_itf self, const char * const fn) {
     instance->samplerate 	= instance->pCodecCtx->sample_rate;
     instance->samplesize	= 2;
 
+    const char * native_sample_format_string = "UNKNOWN";
+
     switch(instance->pCodecCtx->sample_fmt) {
     default:
 	break;
@@ -211,7 +219,11 @@ static int _impl_open(rh_asmp_itf self, const char * const fn) {
 
 	if( instance->pCodecCtx->sample_fmt != AV_SAMPLE_FMT_S16 ) {
 
-		printf("ERROR: audio native format is not S16, we will have to re-sample (TODO)\n");
+		printf("ERROR: audio native format (%d) is not S16, we will have to re-sample (TODO)\n",
+			instance->pCodecCtx->sample_fmt);
+
+
+
 		avformat_close_input(&instance->pFormatCtx);
 		av_freep(&instance->pFrame);
 

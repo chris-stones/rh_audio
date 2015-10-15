@@ -167,11 +167,13 @@ static int _impl_open(rh_audio_itf self, const char * source, int flags) {
 	if(err != 0 && (strncmp("prom_", source, 5) == 0) ) {
 		err = rh_asmp_create(&audio_sample, RH_ASMP_IMP_S5PROM, &_on_output_event, (void*)self);
 		printf(" rh_asmp_create(&audio_sample, RH_ASMP_IMP_S5PROM) == %d\n", err);
+		printf("  @ %s %s %d\n", __FILE__,__FUNCTION__,__LINE__);
 	}
 
 	if(err != 0) {
 		err = rh_asmp_create(&audio_sample, RH_ASMP_IMP_FFMPEG, &_on_output_event, (void*)self);
 		printf(" rh_asmp_create(&audio_sample, RH_ASMP_IMP_FFMPEG) == %d\n", err);
+		printf("  @ %s %s %d\n", __FILE__,__FUNCTION__,__LINE__);
 	}
 
 	if(err != 0)

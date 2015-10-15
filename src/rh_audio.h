@@ -9,6 +9,9 @@ extern "C" {
 
 struct rh_audio;
 
+#define RH_AUDIO_URL_FILESYSTEM(path)\
+	path
+
 #define RH_AUDIO_URL_PROM_LIBESPROM(esprom_handle, sample_int)\
 	"prom_libesprom://%p/%d",esprom_handle,sample_int
 
