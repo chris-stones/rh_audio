@@ -32,6 +32,10 @@ AS_IF([test "x$with_alsa" = "xyes"],
 AS_IF([test "x$with_ffmpeg" = "xyes"],
 [
   AC_DEFINE([RH_WITH_FFMPEG],[1],[use FFmpeg as input API.])
+
+  AC_SEARCH_LIBS([avformat_open_input],  [avformat],[],[AC_MSG_ERROR([Unable to find avcodec library])])
+  AC_SEARCH_LIBS([avcodec_decode_audio4],[avcodec], [],[AC_MSG_ERROR([Unable to find avcodec library])])
+
   AC_CHECK_HEADERS([libavcodec/avcodec.h],[],[AC_MSG_ERROR([Missing libavcodec/libavcodec.h])])
   AC_CHECK_HEADERS([libavformat/avformat.h],[],[AC_MSG_ERROR([Missing libavformat/avformat.h])])
 ])
